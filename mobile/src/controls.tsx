@@ -30,6 +30,7 @@ export function NumberField({ label, mode = 'integer', value, onChange, hint }: 
   onChange: (value: string) => void; hint?: string
 }) {
   const odometer = mode === 'odometer'
+  const explicitDecimal = odometer || mode === 'decimal'
   const fractional = mode !== 'integer'
   return <View style={ui.field}>
     <Text style={ui.label}>{label}</Text>
@@ -37,8 +38,8 @@ export function NumberField({ label, mode = 'integer', value, onChange, hint }: 
     <View style={ui.numberInput}>
       {mode === 'money' && <Text style={ui.numberPrefix}>R$</Text>}
       <TextInput accessibilityLabel={label} placeholder={odometer ? 'Ex. 8,4' : fractional ? '0,00' : '0'} placeholderTextColor="#667971"
-        style={ui.numberValue} value={value} keyboardType={odometer ? 'decimal-pad' : 'number-pad'} maxLength={16}
-        onChangeText={input => onChange(odometer ? input : value === '0,00' && input.length < value.length ? '' : formatNumberDigits(input, fractional))} />
+        style={ui.numberValue} value={value} keyboardType={explicitDecimal ? 'decimal-pad' : 'number-pad'} maxLength={16}
+        onChangeText={input => onChange(explicitDecimal ? input : value === '0,00' && input.length < value.length ? '' : formatNumberDigits(input, fractional))} />
     </View>
   </View>
 }
