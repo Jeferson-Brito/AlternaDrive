@@ -1,0 +1,1 @@
+ALTER TABLE "Vehicle" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'car';
