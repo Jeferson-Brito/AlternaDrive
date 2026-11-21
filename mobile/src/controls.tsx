@@ -26,18 +26,19 @@ export function Field({ label, trailing, ...props }: TextInputProps & { label: s
 }
 
 export function NumberField({ label, mode = 'integer', value, onChange, hint }: {
-  label: string; mode?: 'integer' | 'money' | 'decimal'; value: string
+  label: string; mode?: 'integer' | 'money' | 'decimal' | 'odometer'; value: string
   onChange: (value: string) => void; hint?: string
 }) {
+  const odometer = mode === 'odometer'
   const fractional = mode !== 'integer'
   return <View style={ui.field}>
     <Text style={ui.label}>{label}</Text>
     {!!hint && <Text style={ui.muted}>{hint}</Text>}
     <View style={ui.numberInput}>
       {mode === 'money' && <Text style={ui.numberPrefix}>R$</Text>}
-      <TextInput accessibilityLabel={label} placeholder={fractional ? '0,00' : '0'} placeholderTextColor="#667971"
-        style={ui.numberValue} value={value} keyboardType="number-pad" maxLength={16}
-        onChangeText={input => onChange(value === '0,00' && input.length < value.length ? '' : formatNumberDigits(input, fractional))} />
+      <TextInput accessibilityLabel={label} placeholder={odometer ? 'Ex. 8,4' : fractional ? '0,00' : '0'} placeholderTextColor="#667971"
+        style={ui.numberValue} value={value} keyboardType={odometer ? 'decimal-pad' : 'number-pad'} maxLength={16}
+        onChangeText={input => onChange(odometer ? input : value === '0,00' && input.length < value.length ? '' : formatNumberDigits(input, fractional))} />
     </View>
   </View>
 }

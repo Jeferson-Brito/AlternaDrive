@@ -232,6 +232,8 @@ function Operation() {
     <Button title={busy ? 'Aguarde…' : title} disabled={busy || invalid} onPress={() => void run(action)} />
   const cents = (input: string) => Math.round(numeric(input) * 100)
   const minPrice = (input: string) => numeric(input) > 0
+  const odometerValue = numeric(first)
+  const validOdometer = odometerValue >= 0 && odometerValue <= 10_000_000
 
   return <View style={styles.root}>
     <JourneyMap a={routeA} b={routeB} active={active ?? null} route={route}
@@ -377,18 +379,18 @@ function Operation() {
                   <Text style={styles.label}>{data.defaults.defaultDestination}</Text>
                   <Text style={ui.muted}>Tarifa por passageiro · {money(data.defaults.defaultFare)}</Text>
                 </View>
-                <NumberField label="Hodômetro inicial (km)" value={first} onChange={setFirst} />
+                <NumberField mode="odometer" label="Hodômetro inicial (km)" value={first} onChange={setFirst} />
                 <Text style={ui.muted}>Informe a quilometragem total exibida no painel.</Text>
                 <Button secondary={!useCurrent} title={useCurrent ? '✓ Usar localização atual' : 'Usar localização atual'} onPress={() => setUseCurrent(!useCurrent)} />
-                {submit('Iniciar jornada', begin, !vehicleId || !Number.isInteger(numeric(first)))}
+                {submit('Iniciar jornada', begin, !vehicleId || !validOdometer)}
               </>}
               {panel === 'group' && <>
                 <NumberField label="Número de passageiros" value={first} onChange={setFirst} />
                 {submit('Registrar grupo', () => save('journeys/' + active?.id + '/boardings', { count: numeric(first) }), !Number.isInteger(numeric(first)) || !minPrice(first))}
               </>}
               {panel === 'finish' && <>
-                <NumberField label="Hodômetro final (km)" value={first} onChange={setFirst} />
-                {submit('Confirmar encerramento', finish, !Number.isInteger(numeric(first)) || numeric(first) < (active?.startKm ?? 0))}
+                <NumberField mode="odometer" label="Hodômetro final (km)" value={first} onChange={setFirst} />
+                {submit('Confirmar encerramento', finish, !validOdometer || odometerValue < (active?.startKm ?? 0))}
               </>}
               {panel === 'fuel' && <>
                 <NumberField mode="money" label="Total pago (R$)" value={first} onChange={setFirst} />
