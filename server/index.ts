@@ -36,7 +36,7 @@ const journeyDefaults = {
   defaultFare: true, defaultOrigin: true, defaultDestination: true, defaultPointA: true, defaultPointB: true,
 } as const
 const id = z.string().cuid()
-const userFields = { id: true, name: true, email: true, carColor: true }
+const userFields = { id: true, name: true, email: true, carColor: true, isAdmin: true, suspended: true }
 const app = express()
 if (production) app.set('trust proxy', 1)
 app.disable('x-powered-by')
@@ -53,7 +53,7 @@ app.get('/api/health', async (_req, res) => {
   res.json({ ok: true })
 })
 
-type PublicUser = { id: string; email: string; name: string; carColor: string | null }
+type PublicUser = { id: string; email: string; name: string; carColor: string | null; isAdmin: boolean; suspended: boolean }
 async function login(req: express.Request, res: express.Response, user: PublicUser) {
   const token = randomBytes(32).toString('hex')
   await prisma.session.create({ data: { id: hash(token), userId: user.id, expiresAt: new Date(Date.now() + lifetime) } })
@@ -95,7 +95,9 @@ app.post('/api/login', authLimit, async (req, res) => {
     res.status(401).json({ error: 'E-mail ou senha incorretos.' })
     return
   }
-  await login(req, res, { id: user.id, name: user.name, email: user.email, carColor: user.carColor })
+  if (user.suspended) return res.status(403).json({ error: 'Esta conta está suspensa.' })
+  await login(req, res, { id: user.id, name: user.name, email: user.email, carColor: user.carColor,
+    isAdmin: user.isAdmin, suspended: user.suspended })
 })
 app.post('/api/logout', async (req, res) => {
   const token = sessionId(req)
@@ -105,6 +107,7 @@ app.post('/api/logout', async (req, res) => {
 const passengerLimit = rateLimit({ windowMs: 60_000, limit: 90, standardHeaders: 'draft-7', legacyHeaders: false })
 const passengerSession = z.string().uuid()
 const routePoint = z.array(point).length(7)
+const manualPoints = z.array(point).min(2).max(300)
 app.post('/api/passenger/map', passengerLimit, async (req, res) => {
   const { position, session } = z.object({ position: point, session: passengerSession.optional() }).parse(req.body)
   const stops = await findStops(position)
@@ -129,6 +132,17 @@ app.post('/api/passenger/map', passengerLimit, async (req, res) => {
     const checkpoints = habitualRoute(votes)
     return checkpoints ? [[from, ...checkpoints, to].map(({ latitude, longitude }) => [longitude, latitude] as [number, number])] : []
   })
+  if (stops.length) {
+    const margin = .003
+    const manual = await prisma.manualRoute.findMany({ where: {
+      south: { lte: position.latitude + margin }, north: { gte: position.latitude - margin },
+      west: { lte: position.longitude + margin }, east: { gte: position.longitude - margin },
+    }, select: { points: true } })
+    for (const route of manual) {
+      const points = manualPoints.safeParse(route.points).data
+      if (points) routes.push(points.map(({ latitude, longitude }) => [longitude, latitude]))
+    }
+  }
   const stop = closestServedStop(position, stops, routes)
   res.json({ stop, session: updateWaiting(session, stop), drivers: nearbyDrivers(null, position, undefined, Date.now(), undefined, stop ?? undefined) })
 })
@@ -146,8 +160,46 @@ app.use('/api', async (req, res, next) => {
     res.status(401).json({ error: 'Entre para acessar sua conta.' })
     return
   }
+  if (session.user.suspended) return res.status(403).json({ error: 'Esta conta está suspensa.' })
   res.locals.user = session.user
   next()
+})
+app.use('/api/admin', (_req, res, next) => {
+  if (!res.locals.user.isAdmin) return res.status(403).json({ error: 'Acesso restrito à administração.' })
+  next()
+})
+app.get('/api/admin/drivers', async (req, res) => {
+  const { cursor } = z.object({ cursor: id.optional() }).parse(req.query)
+  const drivers = await prisma.user.findMany({ select: userFields, orderBy: { id: 'asc' }, take: 51,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
+  res.json({ drivers: drivers.slice(0, 50), next: drivers.length > 50 ? drivers[49].id : null })
+})
+app.post('/api/admin/drivers/:id', async (req, res) => {
+  const userId = id.parse(req.params.id)
+  const data = z.object({ name: label.optional(), email: email.optional(), suspended: z.boolean().optional() })
+    .refine(fields => Object.keys(fields).length > 0).parse(req.body)
+  const updated = await prisma.$transaction(async tx => {
+    const result = await tx.user.updateMany({ where: { id: userId, isAdmin: false }, data })
+    if (!result.count) return null
+    if (data.suspended) await tx.session.deleteMany({ where: { userId } })
+    return tx.user.findUnique({ where: { id: userId }, select: userFields })
+  })
+  if (!updated) return res.status(404).json({ error: 'Motorista indisponível para edição.' })
+  if (data.suspended) removeDriver(userId)
+  res.json(updated)
+})
+app.get('/api/admin/routes', async (_req, res) => {
+  res.json(await prisma.manualRoute.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, name: true, points: true } }))
+})
+app.post('/api/admin/routes', async (req, res) => {
+  const { name, points } = z.object({ name: label, points: manualPoints }).parse(req.body)
+  const from = points[0], to = points[points.length - 1]
+  if (distanceMeters(from, to) < 60) return res.status(422).json({ error: 'Desenhe entre pontos separados por pelo menos 60 metros.' })
+  const lat = points.map(p => p.latitude), lon = points.map(p => p.longitude)
+  res.status(201).json(await prisma.manualRoute.create({ data: { name, points,
+    fromLat: from.latitude, toLat: to.latitude, south: Math.min(...lat), north: Math.max(...lat),
+    west: Math.min(...lon), east: Math.max(...lon) } }))
 })
 const recentStationPrices = () => prisma.stationPrice.findMany({ orderBy: { updatedAt: 'desc' }, take: 500 })
 app.get('/api/stations/prices', async (_req, res) => {
@@ -362,6 +414,18 @@ app.post('/api/routes/habitual', async (req, res) => {
   const matchRadius = 250
   const latitudeMargin = matchRadius / 110_000
   const around = (value: number) => ({ gte: value - latitudeMargin, lte: value + latitudeMargin })
+  const manual = await prisma.manualRoute.findMany({
+    where: { fromLat: around(from.latitude), toLat: around(to.latitude) },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  })
+  for (const route of manual) {
+    const points = manualPoints.safeParse(route.points).data
+    if (points && distanceMeters(from, points[0]) <= matchRadius && distanceMeters(to, points[points.length - 1]) <= matchRadius) {
+      const checkpoints = Array.from({ length: Math.min(9, points.length) }, (_, index) =>
+        points[Math.round(index * (points.length - 1) / (Math.min(9, points.length) - 1))])
+      return res.json({ checkpoints, manual: points })
+    }
+  }
   const samples = await prisma.routeExperience.findMany({
     where: { fromLat: around(from.latitude), toLat: around(to.latitude) },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

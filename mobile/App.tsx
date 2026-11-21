@@ -14,6 +14,7 @@ import { Icon, IconButton, Metric, Shortcut } from './src/operation-ui'
 import { Passenger, usePassengerDemand } from './src/Passenger'
 import { DriverMarker } from './src/DriverMarker'
 import { carColors, defaultCarColor } from '../src/car-colors'
+import { Admin } from './src/Admin'
 import { Report } from './src/Report'
 import { useNearbyDrivers } from './src/nearby-drivers'
 import { useRoadRoute } from './src/road-route'
@@ -44,6 +45,7 @@ function Operation() {
   const gate = useRef(false)
   const dashboardRevision = useRef(0)
   const [pendingBoarding, setPendingBoarding] = useState(0)
+  const [adminOpen, setAdminOpen] = useState(false)
   const [passenger, setPassenger] = useState(false)
   const [register, setRegister] = useState(false)
   const [visiblePassword, setVisiblePassword] = useState(false)
@@ -217,6 +219,8 @@ function Operation() {
   }
 
   const secureError = !!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+  if (adminOpen && token && data?.user.isAdmin) return <Admin token={token} center={routeA ?? undefined} close={() => setAdminOpen(false)} />
+
   if (passenger) return <Passenger close={() => setPassenger(false)} />
 
   if (!ready || !token || !data) return <View style={styles.root}>
@@ -457,6 +461,7 @@ function Operation() {
                     <Button secondary title="Ver perfil" onPress={() => show('profile')} />
                   </View>
                 </View>
+                {data.user.isAdmin && <Button secondary title="Administração" onPress={() => { show(null); setAdminOpen(true) }} />}
                 <Button secondary title="Lucro por dia" onPress={() => show('report')} />
                 <Button secondary title="Percurso e tarifa" onPress={() => show('route')} />
                 <Button secondary title="Cadastrar veículo" onPress={() => show('vehicle')} />

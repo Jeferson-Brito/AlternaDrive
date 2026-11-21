@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native'
-import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type MapProps } from '@maplibre/maplibre-react-native'
+import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type MapProps, type MapRef } from '@maplibre/maplibre-react-native'
 import { monochromeStreets } from '../../src/map-style'
 import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
 import { useRouteHighlight } from './route-trail'
 import { StopMarker } from './StopMarker'
+import { MapPencil } from './MapPencil'
 import { DriverMarker } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.
@@ -28,8 +29,9 @@ function NativeRouteHighlight({ road }: { road: RoadLine }) {
   </GeoJSONSource>)}</>
 }
 
-export function JourneyMap({ a, b, active, route, following, onExplore, drivers, demand = [], passengerCenter, carColor, waitingStop }: RouteView) {
+export function JourneyMap({ a, b, active, route, following, onExplore, drivers, demand = [], passengerCenter, carColor, waitingStop, drawPoint, routeEditor }: RouteView) {
   const camera = useRef<CameraRef>(null)
+  const map = useRef<MapRef>(null)
   const { height } = useWindowDimensions()
   const [loaded, setLoaded] = useState(false)
   const { from, current, road, heading, routeError, routeKey, estimate } = route
@@ -53,14 +55,14 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
   }, [loaded, routeKey, current, heading, height, following, passengerCenter])
 
   return <>
-    <Map style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}
+    <Map ref={map} style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}
       onRegionWillChange={event => { if (active && following && event.nativeEvent.userInteraction) onExplore() }}>
       <Camera ref={camera} initialViewState={cityView} />
       {road && <GeoJSONSource id="journey" data={road.geometry}>
         <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
         <Layer type="line" paint={{ 'line-color': '#9763f1', 'line-width': 5 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
       </GeoJSONSource>}
-      {!active && road && <NativeRouteHighlight road={road.geometry} />}
+      {!active && !routeEditor && road && <NativeRouteHighlight road={road.geometry} />}
       {a && <ViewAnnotation id="point-a" lngLat={coords(a)}><Text style={styles.pin}>A</Text></ViewAnnotation>}
       {b && <ViewAnnotation id="point-b" lngLat={coords(b)}><Text style={styles.pin}>B</Text></ViewAnnotation>}
       {demand.map(stop => <ViewAnnotation key={stop.id} id={'stop-' + stop.id} lngLat={coords(stop)}>
@@ -77,7 +79,13 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
         <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
       </ViewAnnotation>}
     </Map>
-    {!active && (routeError || estimate) && <View pointerEvents="none" style={styles.status}>
+    {drawPoint && <MapPencil onPoint={drawPoint} locate={async (x, y) => {
+      const result = await map.current?.unproject([x, y])
+      if (!result) return
+      const [longitude, latitude] = result
+      return { latitude, longitude }
+    }} />}
+    {!active && !routeEditor && (routeError || estimate) && <View pointerEvents="none" style={styles.status}>
       <Text style={styles.statusLabel}>{routeError ? 'Rota indisponível' :
         Math.ceil(estimate!.seconds / 60) + ' min  ·  ' + (estimate!.meters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' km'}</Text>
     </View>}

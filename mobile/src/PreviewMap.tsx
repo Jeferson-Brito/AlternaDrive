@@ -5,6 +5,7 @@ import { navigationPadding, navigationPitch, navigationZoom, type RouteView } fr
 import type { RoadLine } from '../../src/route-geometry'
 import { useRouteHighlight } from './route-trail'
 import { StopMarker } from './StopMarker'
+import { MapPencil } from './MapPencil'
 import { DriverMarker } from './DriverMarker'
 
 const initialRegion = { latitude: -7.132, longitude: -34.871, latitudeDelta: .033, longitudeDelta: .030 }
@@ -39,7 +40,7 @@ function PreviewRouteHighlight({ road }: { road: RoadLine }) {
     strokeColor={band.color} strokeWidth={band.width} lineCap="round" lineJoin="round" zIndex={3 + index} />)}</>
 }
 
-export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, waitingStop, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
+export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, waitingStop, drawPoint, routeEditor, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
   const [ready, setReady] = useState(false)
@@ -55,7 +56,8 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
     else if (a && b) map.current?.fitToCoordinates([a, b], { edgePadding: { top: 120, right: 48, bottom: 190, left: 48 } })
   }, [ready, routeKey, center, heading, height, following, passengerCenter])
 
-  return <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={initialRegion} customMapStyle={previewPalette}
+  return <>
+  <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={initialRegion} customMapStyle={previewPalette}
     userInterfaceStyle="light" onMapReady={() => setReady(true)}
     scrollEnabled={!decorative} zoomEnabled={!decorative} rotateEnabled={!decorative} pitchEnabled={!decorative}
     showsBuildings={false} showsIndoorLevelPicker={false} showsIndoors={false} toolbarEnabled={false}
@@ -66,7 +68,7 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
       <Polyline coordinates={routeCoordinates} strokeColor="#51329a" strokeWidth={8} zIndex={1} />
       <Polyline coordinates={routeCoordinates} strokeColor="#9763f1" strokeWidth={5} zIndex={2} />
     </>}
-    {!active && !decorative && road && <PreviewRouteHighlight road={road.geometry} />}
+    {!active && !decorative && !routeEditor && road && <PreviewRouteHighlight road={road.geometry} />}
     {a && <Marker coordinate={a} title="Ponto A"><Text style={styles.pin}>A</Text></Marker>}
     {b && <Marker coordinate={b} title="Ponto B"><Text style={styles.pin}>B</Text></Marker>}
     {demand.map(stop => <Marker key={'stop-' + stop.id} coordinate={stop} title={stop.name}>
@@ -81,6 +83,9 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
       <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
     </Marker>}
   </MapView>
+    {drawPoint && <MapPencil onPoint={drawPoint} locate={async (x, y) =>
+      map.current?.coordinateForPoint({ x, y })} />}
+  </>
 }
 
 const styles = StyleSheet.create({

@@ -266,6 +266,20 @@ test('isolates accounts and computes the net result of a round trip', async () =
       const { cookie: signedIn } = await call('login', { email: 'first@example.test', password })
       assert(signedIn)
       assert.equal((await call('dashboard', undefined, signedIn)).result.history.length, 2)
+      await call('admin/drivers', undefined, second, 403)
+      await prisma.user.update({ where: { email: 'first@example.test' }, data: { isAdmin: true } })
+      const listed = (await call('admin/drivers', undefined, signedIn)).result.drivers
+      const managed = listed.find((driver: { email: string }) => driver.email === 'second@example.test')
+      assert(managed)
+      await call('admin/drivers/' + managed.id, { suspended: true }, signedIn)
+      await call('dashboard', undefined, second, 401)
+      await call('login', { email: 'second@example.test', password: 'new-test-password' }, undefined, 403)
+      await call('admin/drivers/' + managed.id, { suspended: false }, signedIn)
+      await call('login', { email: 'second@example.test', password: 'new-test-password' })
+      const points = [{ latitude: -7.132, longitude: -34.88 }, { latitude: -7.128, longitude: -34.875 }]
+      await call('admin/routes', { points, name: 'Rota de teste' }, signedIn, 201)
+      const route = await call('routes/habitual', { from: points[0], to: points[1] }, signedIn)
+      assert.deepEqual(route.result.manual, points)
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
       await prisma.$disconnect()

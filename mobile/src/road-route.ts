@@ -36,9 +36,18 @@ export function useRoadRoute({ a, b, active, position, token }: RouteInputs) {
     const start = nearby ?? from
     async function load() {
       const far = distanceMeters(start, from!) > 150
-      const habitual = !far ? await api<{ checkpoints: Point[] | null }>('routes/habitual', { from, to }, token).catch(() => null) : null
+      const habitual = await api<{ checkpoints: Point[] | null; manual?: Point[] }>('routes/habitual', { from, to }, token).catch(() => null)
       if (abort.signal.aborted) return
-      const points = [start, ...(habitual?.checkpoints?.slice(1, -1) ?? []), to!].map(coords).join(';')
+      if (habitual?.manual) {
+        const coordinates = habitual.manual.map(coords)
+        if (!far || routeProgress(start, coordinates).distance <= 90) {
+          const distance = habitual.manual.slice(1).reduce((total, point, index) =>
+            total + distanceMeters(habitual.manual![index], point), 0)
+          setRoad({ geometry: { type: 'LineString', coordinates }, distance, duration: distance / (25 / 3.6) })
+          return
+        }
+      }
+      const points = [start, ...(!far && habitual?.checkpoints?.slice(1, -1) || []), to!].map(coords).join(';')
       const response = await fetch('https://routing.openstreetmap.de/routed-car/route/v1/driving/' + points + '?overview=full&geometries=geojson', { signal: abort.signal })
       if (!response.ok) throw new Error('Rota indisponível.')
       const data = await response.json() as { routes?: Road[] }
@@ -74,6 +83,8 @@ export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & {
   onExplore: () => void
   drivers: NearbyDriver[]
   demand?: StopDemand[]
+  drawPoint?: (point: Point) => void
+  routeEditor?: boolean
   carColor?: string | null
   passengerCenter?: Point
   waitingStop?: Omit<StopDemand, 'count'>

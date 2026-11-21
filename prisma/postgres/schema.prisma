@@ -11,6 +11,8 @@ model User {
   name      String
   password  String
   carColor  String?
+  isAdmin   Boolean @default(false)
+  suspended Boolean @default(false)
   defaultFare Int?
   defaultOrigin String?
   defaultDestination String?
@@ -148,4 +150,18 @@ model CompletedLeg {
   distanceKm Float?
   review String
   @@id([journeyId, index])
+}
+model ManualRoute {
+  id          String   @id @default(cuid())
+  name        String
+  fromLat     Float
+  toLat       Float
+  south       Float
+  north       Float
+  west        Float
+  east        Float
+  points      Json
+  createdAt   DateTime @default(now())
+
+  @@index([fromLat, toLat])
 }

@@ -14,7 +14,7 @@ export type Vehicle = {
   efficiency: number; cityEfficiency: number | null; highwayEfficiency: number | null; urbanShare: number; catalogId: string | null
 }
 export type Dashboard = {
-  user: { name: string; email: string; carColor?: string | null }
+  user: { name: string; email: string; isAdmin?: boolean; carColor?: string | null }
   vehicles: Vehicle[]
   defaults: { defaultOrigin: string | null; defaultDestination: string | null; defaultFare: number | null; defaultPointA: Point | null; defaultPointB: Point | null }
   active: Journey | null
