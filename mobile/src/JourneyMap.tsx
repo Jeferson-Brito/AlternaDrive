@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type MapProps } from '@maplibre/maplibre-react-native'
 import { monochromeStreets } from '../../src/map-style'
 import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
+import type { RoadLine } from '../../src/route-geometry'
+import { useRouteHighlight } from './route-highlight'
 import { DriverMarker } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.
@@ -16,6 +18,15 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
     <Camera initialViewState={cityView} />
   </Map>
 }
+function NativeRouteHighlight({ road }: { road: RoadLine }) {
+  const coordinates = useRouteHighlight(road)
+  if (coordinates.length < 2) return null
+  return <GeoJSONSource id="journey-highlight" data={{ type: 'LineString', coordinates }}>
+    <Layer type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+      paint={{ 'line-color': '#b8e3ff', 'line-width': 4 }} />
+  </GeoJSONSource>
+}
+
 export function JourneyMap({ a, b, active, route, following, onExplore, drivers }: RouteView) {
   const camera = useRef<CameraRef>(null)
   const { height } = useWindowDimensions()
@@ -46,6 +57,7 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers 
         <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
         <Layer type="line" paint={{ 'line-color': '#9763f1', 'line-width': 5 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
       </GeoJSONSource>}
+      {!active && road && <NativeRouteHighlight road={road.geometry} />}
       {a && <ViewAnnotation id="point-a" lngLat={coords(a)}><Text style={styles.pin}>A</Text></ViewAnnotation>}
       {b && <ViewAnnotation id="point-b" lngLat={coords(b)}><Text style={styles.pin}>B</Text></ViewAnnotation>}
       {drivers.map(driver => <ViewAnnotation key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)}>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions } from 'react-native'
 import MapView, { Marker, Polyline, type MapStyleElement } from 'react-native-maps'
 import { navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
+import type { RoadLine } from '../../src/route-geometry'
+import { useRouteHighlight } from './route-highlight'
 import { DriverMarker } from './DriverMarker'
 
 const initialRegion = { latitude: -7.132, longitude: -34.871, latitudeDelta: .033, longitudeDelta: .030 }
@@ -29,6 +31,13 @@ const previewPalette: MapStyleElement[] = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#527384' }] },
 ]
 
+function PreviewRouteHighlight({ road }: { road: RoadLine }) {
+  const coordinates = useRouteHighlight(road)
+  if (coordinates.length < 2) return null
+  return <Polyline coordinates={coordinates.map(([longitude, latitude]) => ({ latitude, longitude }))}
+    strokeColor="#b8e3ff" strokeWidth={4} zIndex={3} />
+}
+
 export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
@@ -55,6 +64,7 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
       <Polyline coordinates={routeCoordinates} strokeColor="#51329a" strokeWidth={8} zIndex={1} />
       <Polyline coordinates={routeCoordinates} strokeColor="#9763f1" strokeWidth={5} zIndex={2} />
     </>}
+    {!active && !decorative && road && <PreviewRouteHighlight road={road.geometry} />}
     {a && <Marker coordinate={a} title="Ponto A"><Text style={styles.pin}>A</Text></Marker>}
     {b && <Marker coordinate={b} title="Ponto B"><Text style={styles.pin}>B</Text></Marker>}
     {drivers.map(driver => <Marker key={driver.id} coordinate={driver} title="Motorista próximo" anchor={{ x: .5, y: .5 }}>
