@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef } from '@maplibre/maplibre-react-native'
+import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type MapProps } from '@maplibre/maplibre-react-native'
 import type { LocationObject } from 'expo-location'
 import { distanceMeters } from '../../src/arrival'
+import { monochromeStreets } from '../../src/map-style'
 import { routeProgress, type RoadLine } from '../../src/route-geometry'
 import { api } from './api'
+import libertyStyle from '../assets/openfreemap-liberty.json'
 import type { Journey, Point } from './model'
 
 const coords = ({ longitude, latitude }: Point): [number, number] => [longitude, latitude]
-const mapStyle = 'https://tiles.openfreemap.org/styles/liberty'
-const cityView = { center: [-34.874, -7.122] as [number, number], zoom: 12 }
+// Both renderers use style v8, with separate TypeScript style packages.
+const mapStyle = monochromeStreets(libertyStyle as Parameters<typeof monochromeStreets>[0]) as unknown as MapProps['mapStyle']
+const cityView = { center: [-34.871, -7.132] as [number, number], zoom: 14 }
 
 export function LoginMap({ bottomInset }: { bottomInset: number }) {
   return <Map androidView="texture" style={StyleSheet.absoluteFill} mapStyle={mapStyle}
