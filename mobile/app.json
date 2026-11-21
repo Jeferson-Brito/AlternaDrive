@@ -2,13 +2,14 @@
   "expo": {
     "name": "AlternaDrive",
     "slug": "alternadrive",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "platforms": [
       "android"
     ],
     "android": {
-      "package": "com.alternadrive.app"
+      "package": "com.alternadrive.app",
+      "versionCode": 2
     },
     "plugins": [
       "expo-secure-store",

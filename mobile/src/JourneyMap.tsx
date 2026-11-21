@@ -9,6 +9,15 @@ import type { Journey, Point } from './model'
 
 const coords = ({ longitude, latitude }: Point): [number, number] => [longitude, latitude]
 const mapStyle = 'https://tiles.openfreemap.org/styles/liberty'
+const cityView = { center: [-34.874, -7.122] as [number, number], zoom: 12 }
+
+export function LoginMap({ bottomInset }: { bottomInset: number }) {
+  return <Map androidView="texture" style={StyleSheet.absoluteFill} mapStyle={mapStyle}
+    dragPan={false} touchZoom={false} touchRotate={false} touchPitch={false} logo={false}
+    attributionPosition={{ bottom: bottomInset + 8, left: 12 }}>
+    <Camera initialViewState={cityView} />
+  </Map>
+}
 type Road = { geometry: RoadLine; distance: number; duration: number }
 
 export function JourneyMap({ a, b, active, position, token }: {
@@ -78,7 +87,7 @@ export function JourneyMap({ a, b, active, position, token }: {
 
   return <>
     <Map style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}>
-      <Camera ref={camera} initialViewState={{ center: [-34.874, -7.122], zoom: 12 }} />
+      <Camera ref={camera} initialViewState={cityView} />
       {road && <GeoJSONSource id="journey" data={road.geometry}>
         <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
         <Layer type="line" paint={{ 'line-color': '#9763f1', 'line-width': 5 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />

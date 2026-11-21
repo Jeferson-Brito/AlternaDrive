@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, AppState, Image, Modal, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
 import { StatusBar } from 'expo-status-bar'
 import { api, ApiError, authenticate, clearSession, readSession } from './src/api'
 import { Address, Button, Field, ui } from './src/controls'
-import { JourneyMap } from './src/JourneyMap'
+import { JourneyMap, LoginMap } from './src/JourneyMap'
 import { type Closing, type Dashboard, type Place, money, numeric } from './src/model'
 import { onArrival, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
 import { workDuration } from '../src/journey-time'
@@ -24,6 +24,7 @@ function Brand() {
 }
 
 function Operation() {
+  const { bottom } = useSafeAreaInsets()
   const [token, setToken] = useState<string | null>(null)
   const [data, setData] = useState<Dashboard | null>(null)
   const [ready, setReady] = useState(false)
@@ -171,26 +172,31 @@ function Operation() {
   }
 
   const secureError = !!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
-  if (!ready || !token || !data) return <SafeAreaView style={styles.login}>
-    <ScrollView contentContainerStyle={styles.loginBody} keyboardShouldPersistTaps="handled">
-      <Brand />
-      <Text style={styles.title}>{!ready ? 'Carregando…' : token ? 'Conectando à sua conta' : register ? 'Criar conta' : 'Entre na sua conta'}</Text>
-      {secureError}
-      {ready && (token ? <Button title="Tentar novamente" disabled={busy} onPress={() => void run(async () => { await reload(token) })} /> : <>
-        {register && <Field label="Nome" value={name} onChangeText={setName} />}
-        <Field label="E-mail" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-        <Field label="Senha" value={password} onChangeText={setPassword} secureTextEntry={!visiblePassword} autoCapitalize="none" />
-        <Button title={visiblePassword ? 'Ocultar senha' : 'Mostrar senha'} onPress={() => setVisiblePassword(!visiblePassword)} secondary />
-        <Button title={register ? 'Cadastrar' : 'Entrar'} disabled={busy} onPress={() => void run(async () => {
-          const session = await authenticate(register ? 'register' : 'login', register ? { email, password, name } : { email, password })
-          setPassword('')
-          setToken(session)
-          await reload(session)
-        })} />
-        <Button secondary title={register ? 'Já tenho conta' : 'Criar conta'} onPress={() => { setRegister(!register); setError('') }} />
-      </>)}
-    </ScrollView>
-  </SafeAreaView>
+  if (!ready || !token || !data) return <View style={styles.root}>
+    <LoginMap bottomInset={bottom} />
+    <SafeAreaView pointerEvents="box-none" style={styles.login}>
+      <ScrollView contentContainerStyle={styles.loginBody} keyboardShouldPersistTaps="handled">
+        <View style={styles.loginCard}>
+          <Brand />
+          <Text style={styles.title}>{!ready ? 'Carregando…' : token ? 'Conectando à sua conta' : register ? 'Criar conta' : 'Entre na sua conta'}</Text>
+          {secureError}
+          {ready && (token ? <Button title="Tentar novamente" disabled={busy} onPress={() => void run(async () => { await reload(token) })} /> : <>
+            {register && <Field label="Nome" value={name} onChangeText={setName} />}
+            <Field label="E-mail" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+            <Field label="Senha" value={password} onChangeText={setPassword} secureTextEntry={!visiblePassword} autoCapitalize="none" />
+            <Button title={visiblePassword ? 'Ocultar senha' : 'Mostrar senha'} onPress={() => setVisiblePassword(!visiblePassword)} secondary />
+            <Button title={register ? 'Cadastrar' : 'Entrar'} disabled={busy} onPress={() => void run(async () => {
+              const session = await authenticate(register ? 'register' : 'login', register ? { email, password, name } : { email, password })
+              setPassword('')
+              setToken(session)
+              await reload(session)
+            })} />
+            <Button secondary title={register ? 'Já tenho conta' : 'Criar conta'} onPress={() => { setRegister(!register); setError('') }} />
+          </>)}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  </View>
 
   const stats = data.summaries.find(item => item.period === (active ? 'day' : period))
   const destination = active ? (active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
@@ -320,8 +326,9 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#dbe9e2' },
-  login: { flex: 1, backgroundColor: '#e7f1eb' },
-  loginBody: { padding: 24, gap: 13, flexGrow: 1, justifyContent: 'center' },
+  login: { flex: 1, paddingBottom: 36 },
+  loginBody: { padding: 18, flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  loginCard: { width: '100%', maxWidth: 440, gap: 12, padding: 20, borderRadius: 22, backgroundColor: '#fff', elevation: 5 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandIcon: { width: 34, height: 34, borderRadius: 9 },
   brand: { fontSize: 23, fontWeight: '900', color: '#0b5a48', letterSpacing: -.7 },
