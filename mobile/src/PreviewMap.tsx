@@ -30,10 +30,13 @@ const previewPalette: MapStyleElement[] = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#527384' }] },
 ]
 
-function PreviewRouteHighlight({ coordinates }: { coordinates: { latitude: number; longitude: number }[] }) {
-  const opacity = useRoutePulse()
-  return <Polyline coordinates={coordinates} strokeColor={`rgba(217,196,255,${opacity})`}
-    strokeWidth={5} lineCap="round" lineJoin="round" zIndex={3} />
+function PreviewRouteLine({ coordinates, animate }: {
+  coordinates: { latitude: number; longitude: number }[]
+  animate: boolean
+}) {
+  const pulse = useRoutePulse(animate)
+  return <Polyline coordinates={coordinates} strokeColor={pulse.color}
+    strokeWidth={pulse.width} lineCap="round" lineJoin="round" zIndex={2} />
 }
 
 export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
@@ -60,9 +63,8 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
     onRegionChangeStart={(_, details) => { if (active && following && details?.isGesture) onExplore?.() }}>
     {routeCoordinates && <>
       <Polyline coordinates={routeCoordinates} strokeColor="#51329a" strokeWidth={8} zIndex={1} />
-      <Polyline coordinates={routeCoordinates} strokeColor="#9763f1" strokeWidth={5} zIndex={2} />
+      <PreviewRouteLine coordinates={routeCoordinates} animate={!active && !decorative} />
     </>}
-    {!active && !decorative && routeCoordinates && <PreviewRouteHighlight coordinates={routeCoordinates} />}
     {a && <Marker coordinate={a} title="Ponto A"><Text style={styles.pin}>A</Text></Marker>}
     {b && <Marker coordinate={b} title="Ponto B"><Text style={styles.pin}>B</Text></Marker>}
     {drivers.map(driver => <Marker key={driver.id} coordinate={driver} title="Motorista próximo" anchor={{ x: .5, y: .5 }}>

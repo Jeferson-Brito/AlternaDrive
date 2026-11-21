@@ -18,11 +18,12 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
     <Camera initialViewState={cityView} />
   </Map>
 }
-function NativeRouteHighlight({ road }: { road: RoadLine }) {
-  const opacity = useRoutePulse()
-  return <GeoJSONSource id="journey-highlight" data={road}>
+function NativeRouteLine({ road, animate }: { road: RoadLine; animate: boolean }) {
+  const pulse = useRoutePulse(animate)
+  return <GeoJSONSource id="journey" data={road}>
+    <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
     <Layer type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-      paint={{ 'line-color': '#d9c4ff', 'line-width': 5, 'line-opacity': opacity }} />
+      paint={{ 'line-color': pulse.color, 'line-width': pulse.width }} />
   </GeoJSONSource>
 }
 
@@ -52,11 +53,7 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers 
     <Map style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}
       onRegionWillChange={event => { if (active && following && event.nativeEvent.userInteraction) onExplore() }}>
       <Camera ref={camera} initialViewState={cityView} />
-      {road && <GeoJSONSource id="journey" data={road.geometry}>
-        <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
-        <Layer type="line" paint={{ 'line-color': '#9763f1', 'line-width': 5 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
-      </GeoJSONSource>}
-      {!active && road && <NativeRouteHighlight road={road.geometry} />}
+      {road && <NativeRouteLine road={road.geometry} animate={!active} />}
       {a && <ViewAnnotation id="point-a" lngLat={coords(a)}><Text style={styles.pin}>A</Text></ViewAnnotation>}
       {b && <ViewAnnotation id="point-b" lngLat={coords(b)}><Text style={styles.pin}>B</Text></ViewAnnotation>}
       {drivers.map(driver => <ViewAnnotation key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)}>
