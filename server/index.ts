@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
 import { combinedEfficiency } from './vehicle-efficiency'
 import { chartPeriods, dailyProfit, nextReportingDay, periods, summarize } from './finance'
+import { findAddresses } from '../src/address-search'
 import { distanceMeters, isArrival } from '../src/arrival'
 import { habitualRoute, routeCheckpoints } from '../src/route-geometry'
 
@@ -113,6 +114,20 @@ app.use('/api', async (req, res, next) => {
 const recentStationPrices = () => prisma.stationPrice.findMany({ orderBy: { updatedAt: 'desc' }, take: 500 })
 app.get('/api/stations/prices', async (_req, res) => {
   res.json(await recentStationPrices())
+})
+app.get('/api/addresses', rateLimit({
+  windowMs: 60_000, limit: 90, standardHeaders: 'draft-7', legacyHeaders: false,
+  message: { error: 'Muitas buscas. Aguarde alguns segundos.' },
+}), async (req, res) => {
+  const { q } = z.object({ q: z.string().trim().min(3).max(240) }).parse(req.query)
+  try {
+    const matches = await findAddresses('api/', {
+      q, limit: '6', lat: '-7.132', lon: '-34.871', countrycode: 'BR',
+    }, AbortSignal.timeout(9_000))
+    res.json(matches)
+  } catch {
+    res.status(503).json({ error: 'Busca de endereços indisponível. Tente novamente.' })
+  }
 })
 app.get('/api/dashboard', async (_req, res) => {
   const user: PublicUser = res.locals.user

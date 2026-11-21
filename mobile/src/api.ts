@@ -11,11 +11,12 @@ export class ApiError extends Error {
 export const readSession = () => SecureStore.getItemAsync(sessionKey)
 export const clearSession = () => SecureStore.deleteItemAsync(sessionKey)
 
-export async function api<T = unknown>(path: string, body?: object, token?: string | null): Promise<T> {
+export async function api<T = unknown>(path: string, body?: object, token?: string | null, signal?: AbortSignal): Promise<T> {
   if (!origin || (!__DEV__ && !origin.startsWith('https://'))) {
     throw new Error('Configure o endereço HTTPS do servidor do AlternaDrive.')
   }
   const response = await fetch(origin + '/api/' + path, {
+    signal,
     method: body === undefined ? 'GET' : 'POST',
     headers: {
       'X-AlternaDrive-Client': 'android',

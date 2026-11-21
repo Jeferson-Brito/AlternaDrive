@@ -39,6 +39,23 @@ test('isolates accounts and computes the net result of a round trip', async () =
       const { cookie: first } = await call('register', { name: 'Primeira', email: 'first@example.test', password })
       const { cookie: second } = await call('register', { name: 'Segunda', email: 'second@example.test', password })
       assert(first && second)
+      await call('addresses?q=Rua%20Dom%20Bosco', undefined, undefined, 401)
+      await call('addresses?q=Ru', undefined, first, 422)
+      const fetchAddress = globalThis.fetch
+      globalThis.fetch = async (input, init) => {
+        if (typeof input !== 'string' || !input.startsWith('https://photon.komoot.io/')) return fetchAddress(input, init)
+        const query = new URL(input).searchParams
+        assert.equal(query.get('q'), 'Rua Dom Bosco')
+        assert.equal(query.get('countrycode'), 'BR')
+        return Response.json({ features: [{ properties: { name: 'Rua Dom Bosco', city: 'João Pessoa' },
+          geometry: { coordinates: [-34.881, -7.151] } }] })
+      }
+      try {
+        const { result } = await call('addresses?q=Rua%20Dom%20Bosco', undefined, first)
+        assert.deepEqual(result, [{ label: 'Rua Dom Bosco · João Pessoa', latitude: -7.151, longitude: -34.881 }])
+      } finally {
+        globalThis.fetch = fetchAddress
+      }
       const mobile = await call('login', { email: 'first@example.test', password }, undefined, 200, { 'X-AlternaDrive-Client': 'android' })
       assert.equal(mobile.cookie, undefined)
       assert.match(mobile.result.token, /^[a-f0-9]{64}$/)

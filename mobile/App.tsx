@@ -328,8 +328,8 @@ function Operation() {
                 })}
               </>}
               {panel === 'route' && <>
-                <Address label="Ponto A" value={pointA} onChange={setPointA} />
-                <Address label="Ponto B" value={pointB} onChange={setPointB} />
+                <Address token={token} label="Ponto A" value={pointA} onChange={setPointA} />
+                <Address token={token} label="Ponto B" value={pointB} onChange={setPointB} />
                 <NumberField mode="money" label="Tarifa por passageiro (R$)" value={first} onChange={setFirst} />
                 {submit('Salvar percurso', () => save('settings/journey', {
                   defaultOrigin: pointA?.label, defaultDestination: pointB?.label,

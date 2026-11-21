@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
-import { findAddresses } from '../../src/address-search'
+import { api } from './api'
 import { formatNumberDigits } from '../../src/localized-number'
 import type { Place } from './model'
 
@@ -41,41 +41,48 @@ export function NumberField({ label, mode = 'integer', value, onChange, hint }: 
   </View>
 }
 
-export function Address({ label, value, onChange }: { label: string; value: Place | null; onChange: (value: Place | null) => void }) {
+export function Address({ label, value, onChange, token }: { label: string; value: Place | null; onChange: (value: Place | null) => void; token: string }) {
   const [text, setText] = useState(value?.label ?? '')
   const [matches, setMatches] = useState<Place[]>([])
   const [hint, setHint] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [retry, setRetry] = useState(0)
   useEffect(() => {
     setHint('')
+    setFailed(false)
     setMatches([])
-    if (value || text.trim().length < 3) return
+    if (value || text.trim().length < 3 || text.trim().length > 240) return
     const controller = new AbortController()
     const timer = setTimeout(async () => {
+      setHint('Buscando endereços…')
       const timeout = setTimeout(() => {
         if (!controller.signal.aborted) {
           setHint('Busca indisponível. Tente novamente.')
+          setFailed(true)
           controller.abort()
         }
-      }, 7000)
+      }, 16000)
       try {
-        const places = await findAddresses('api/', {
-          q: text.trim(), limit: '6', lat: '-7.132', lon: '-34.871', countrycode: 'BR',
-        }, controller.signal)
+        const places = await api<Place[]>('addresses?q=' + encodeURIComponent(text.trim()), undefined, token, controller.signal)
         if (controller.signal.aborted) return
         setMatches(places)
-        if (!places.length) setHint('Nenhum endereço encontrado.')
+        setHint(places.length ? '' : 'Sem sugestões. Tente incluir o bairro ou a cidade.')
       } catch {
-        if (!controller.signal.aborted) setHint('Busca indisponível. Tente novamente.')
+        if (!controller.signal.aborted) {
+          setHint('Busca indisponível. Tente novamente.')
+          setFailed(true)
+        }
       } finally {
         clearTimeout(timeout)
       }
     }, 450)
     return () => { clearTimeout(timer); controller.abort() }
-  }, [text, value])
+  }, [text, value, retry, token])
 
   return <View style={ui.field}>
-    <Field label={label} value={text} onChangeText={input => { setText(input); onChange(null) }} />
+    <Field label={label} value={text} maxLength={240} onChangeText={input => { setText(input); onChange(null) }} />
     {!!hint && <Text style={ui.muted}>{hint}</Text>}
+    {failed && <Button title="Tentar busca novamente" secondary onPress={() => setRetry(value => value + 1)} />}
     {value && <Text style={ui.muted}>Local confirmado</Text>}
     {matches.map(place => <Button key={place.label + place.latitude + place.longitude} secondary title={place.label}
       onPress={() => { setText(place.label); onChange(place) }} />)}
