@@ -4,7 +4,7 @@ import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type
 import { monochromeStreets } from '../../src/map-style'
 import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
-import { useRouteHighlight } from './route-highlight'
+import { useRoutePulse } from './route-highlight'
 import { DriverMarker } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.
@@ -19,12 +19,11 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
   </Map>
 }
 function NativeRouteHighlight({ road }: { road: RoadLine }) {
-  const highlight = useRouteHighlight(road)
-  return <>{highlight.map(band => <GeoJSONSource key={band.id} id={'journey-highlight-' + band.id}
-    data={{ type: 'LineString', coordinates: band.coordinates }}>
+  const opacity = useRoutePulse()
+  return <GeoJSONSource id="journey-highlight" data={road}>
     <Layer type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-      paint={{ 'line-color': band.color, 'line-width': band.width }} />
-  </GeoJSONSource>)}</>
+      paint={{ 'line-color': '#d9c4ff', 'line-width': 5, 'line-opacity': opacity }} />
+  </GeoJSONSource>
 }
 
 export function JourneyMap({ a, b, active, route, following, onExplore, drivers }: RouteView) {
