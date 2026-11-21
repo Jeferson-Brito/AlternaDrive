@@ -19,12 +19,12 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
   </Map>
 }
 function NativeRouteHighlight({ road }: { road: RoadLine }) {
-  const coordinates = useRouteHighlight(road)
-  if (coordinates.length < 2) return null
-  return <GeoJSONSource id="journey-highlight" data={{ type: 'LineString', coordinates }}>
+  const highlight = useRouteHighlight(road)
+  return <>{highlight.map(band => <GeoJSONSource key={band.id} id={'journey-highlight-' + band.id}
+    data={{ type: 'LineString', coordinates: band.coordinates }}>
     <Layer type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-      paint={{ 'line-color': '#b8e3ff', 'line-width': 4 }} />
-  </GeoJSONSource>
+      paint={{ 'line-color': band.color, 'line-width': band.width }} />
+  </GeoJSONSource>)}</>
 }
 
 export function JourneyMap({ a, b, active, route, following, onExplore, drivers }: RouteView) {

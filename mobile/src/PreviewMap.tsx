@@ -32,10 +32,10 @@ const previewPalette: MapStyleElement[] = [
 ]
 
 function PreviewRouteHighlight({ road }: { road: RoadLine }) {
-  const coordinates = useRouteHighlight(road)
-  if (coordinates.length < 2) return null
-  return <Polyline coordinates={coordinates.map(([longitude, latitude]) => ({ latitude, longitude }))}
-    strokeColor="#b8e3ff" strokeWidth={4} zIndex={3} />
+  const highlight = useRouteHighlight(road)
+  return <>{highlight.map((band, index) => <Polyline key={band.id}
+    coordinates={band.coordinates.map(([longitude, latitude]) => ({ latitude, longitude }))}
+    strokeColor={band.color} strokeWidth={band.width} lineCap="round" lineJoin="round" zIndex={3 + index} />)}</>
 }
 
 export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
