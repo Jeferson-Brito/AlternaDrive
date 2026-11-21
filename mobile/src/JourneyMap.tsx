@@ -4,7 +4,7 @@ import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type
 import { monochromeStreets } from '../../src/map-style'
 import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
-import { useRoutePulse } from './route-highlight'
+import { useRoutePulse } from './route-pulse'
 import { DriverMarker } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.

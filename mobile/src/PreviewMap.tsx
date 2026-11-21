@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions } from 'react-native'
 import MapView, { Marker, Polyline, type MapStyleElement } from 'react-native-maps'
 import { navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
-import { useRoutePulse } from './route-highlight'
+import { useRoutePulse } from './route-pulse'
 import { DriverMarker } from './DriverMarker'
 
 const initialRegion = { latitude: -7.132, longitude: -34.871, latitudeDelta: .033, longitudeDelta: .030 }
