@@ -5,10 +5,11 @@ import * as Location from 'expo-location'
 import * as SecureStore from 'expo-secure-store'
 import { StatusBar } from 'expo-status-bar'
 import { api, ApiError, authenticate, clearSession, readSession } from './src/api'
-import { Address, Button, Field, NumberField, ui } from './src/controls'
+import { Button, Field, NumberField, ui } from './src/controls'
 import { JourneyMap, LoginMap } from './src/AppMap'
 import { isExpoGo } from './src/environment'
 import { VehicleForm } from './src/VehicleForm'
+import { RouteForm } from './src/RouteForm'
 import { Icon, IconButton, Metric, Shortcut } from './src/operation-ui'
 import { Report } from './src/Report'
 import { useRoadRoute } from './src/road-route'
@@ -327,15 +328,12 @@ function Operation() {
                   setData(null)
                 })}
               </>}
-              {panel === 'route' && <>
-                <Address token={token} label="Ponto A" value={pointA} onChange={setPointA} />
-                <Address token={token} label="Ponto B" value={pointB} onChange={setPointB} />
-                <NumberField mode="money" label="Tarifa por passageiro (R$)" value={first} onChange={setFirst} />
-                {submit('Salvar percurso', () => save('settings/journey', {
+              {panel === 'route' && <RouteForm token={token} origin={pointA} destination={pointB}
+                onOrigin={setPointA} onDestination={setPointB} fare={first} onFare={setFirst} busy={busy}
+                onSave={() => void run(() => save('settings/journey', {
                   defaultOrigin: pointA?.label, defaultDestination: pointB?.label,
                   defaultPointA: pointA, defaultPointB: pointB, defaultFare: cents(first),
-                }), !pointA || !pointB || !minPrice(first))}
-              </>}
+                }))} />}
               {panel === 'vehicle' && <VehicleForm busy={busy} save={vehicle => void run(() => save('vehicles', vehicle))} />}
               {(panel === 'start' || panel === 'fuel') && <><Text style={styles.label}>Veículo</Text>{vehicles}</>}
               {panel === 'start' && <>

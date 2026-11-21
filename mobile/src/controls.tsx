@@ -41,7 +41,7 @@ export function NumberField({ label, mode = 'integer', value, onChange, hint }: 
   </View>
 }
 
-export function Address({ label, value, onChange, token }: { label: string; value: Place | null; onChange: (value: Place | null) => void; token: string }) {
+export function Address({ label, placeholder, value, onChange, token }: { label: string; placeholder?: string; value: Place | null; onChange: (value: Place | null) => void; token: string }) {
   const [text, setText] = useState(value?.label ?? '')
   const [matches, setMatches] = useState<Place[]>([])
   const [hint, setHint] = useState('')
@@ -80,12 +80,22 @@ export function Address({ label, value, onChange, token }: { label: string; valu
   }, [text, value, retry, token])
 
   return <View style={ui.field}>
-    <Field label={label} value={text} maxLength={240} onChangeText={input => { setText(input); onChange(null) }} />
+    <Field label={label} placeholder={placeholder} value={text} maxLength={240} autoCorrect={false} onChangeText={input => { setText(input); onChange(null) }} />
     {!!hint && <Text style={ui.muted}>{hint}</Text>}
     {failed && <Button title="Tentar busca novamente" secondary onPress={() => setRetry(value => value + 1)} />}
-    {value && <Text style={ui.muted}>Local confirmado</Text>}
-    {matches.map(place => <Button key={place.label + place.latitude + place.longitude} secondary title={place.label}
-      onPress={() => { setText(place.label); onChange(place) }} />)}
+    {value && <Text style={ui.confirmed}>✓ Endereço confirmado</Text>}
+    {matches.length > 0 && <View style={ui.addressOptions}>
+      {matches.map(place => {
+        const [name, ...details] = place.label.split(' · ')
+        return <Pressable key={place.label + place.latitude + place.longitude}
+          accessibilityRole="button" accessibilityLabel={place.label}
+          style={({ pressed }) => [ui.addressOption, pressed && ui.secondary]}
+          onPress={() => { setText(place.label); onChange(place) }}>
+          <Text style={ui.label}>{name}</Text>
+          {details.length > 0 && <Text style={ui.muted}>{details.join(' · ')}</Text>}
+        </Pressable>
+      })}
+    </View>}
   </View>
 }
 
@@ -103,5 +113,8 @@ export const ui = StyleSheet.create({
   numberInput: { flexDirection: 'row', alignItems: 'center', minHeight: 49, paddingHorizontal: 12, backgroundColor: '#f6faf8', borderColor: '#c6d9ce', borderWidth: 1, borderRadius: 11 },
   numberPrefix: { color: '#526a60', fontWeight: '700', marginRight: 8 },
   numberValue: { flex: 1, minHeight: 46, fontSize: 16, color: '#142d24', padding: 0, fontVariant: ['tabular-nums'] },
+  confirmed: { color: '#0b5a48', fontWeight: '700', fontSize: 12 },
+  addressOptions: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d8e7df', borderRadius: 11, overflow: 'hidden' },
+  addressOption: { gap: 2, paddingHorizontal: 10, paddingVertical: 9, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e0ebe5' },
   muted: { color: '#526a60', fontSize: 13 },
 })
