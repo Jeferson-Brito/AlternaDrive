@@ -45,7 +45,6 @@ function Operation() {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [panel, setPanel] = useState<Panel | null>(null)
-  const [period, setPeriod] = useState('month')
   const [hide, setHide] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [following, setFollowing] = useState(true)
@@ -223,13 +222,10 @@ function Operation() {
     </SafeAreaView>
   </View>
 
-  const stats = data.summaries.find(item => item.period === (active ? 'day' : period))
+  const stats = data.summaries.find(item => item.period === 'day')
   const destination = active ? (active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
-  const statsContent = <>
-    <Metric label="Embarques" value={stats?.passengers ?? 0} dark={Boolean(active)} />
-    <Metric label="Receita" value={hide ? '••••' : money(stats?.revenue ?? 0)} dark={Boolean(active)} />
-    <Metric label="Lucro est." value={hide ? '••••' : money(stats?.profit ?? null)} dark={Boolean(active)} />
-  </>
+  const dayRevenue = hide ? '••••' : money(stats?.revenue ?? 0)
+  const dayBoardings = stats?.passengers ?? 0
   const vehicles = data.vehicles.map(vehicle => <Button key={vehicle.id} secondary={vehicle.id !== vehicleId}
     title={vehicle.name} onPress={() => setVehicleId(vehicle.id)} />)
   const submit = (title: string, action: () => Promise<void>, invalid = false) =>
@@ -242,17 +238,29 @@ function Operation() {
       following={following} onExplore={() => setFollowing(false)} drivers={drivers} />
     <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
       {active ? <View style={styles.stats}>
-        {statsContent}
+        <Metric label="Embarques" value={dayBoardings} dark />
+        <Metric label="Receita" value={dayRevenue} dark />
+        <Metric label="Lucro est." value={hide ? '••••' : money(stats?.profit ?? null)} dark />
         <IconButton dark icon={hide ? 'eyeOff' : 'eye'} label={hide ? 'Exibir valores' : 'Ocultar valores'} onPress={toggleFinancePrivacy} />
-      </View> : <View style={styles.cardRow}><Brand />
-        <View style={styles.headerActions}>
-          <IconButton icon="activity" label="Resumo financeiro" onPress={() => show('report')} />
+      </View> : <View style={styles.homeTop} pointerEvents="box-none">
+        <View style={styles.floatingMenu}>
           <IconButton icon="menu" label="Menu da operação" onPress={() => show('menu')} />
+        </View>
+        <View style={styles.dayBubble}>
+          <View style={styles.dayMetric}>
+            <Text style={styles.dayLabel}>Receita hoje</Text>
+            <Text style={styles.dayValue} numberOfLines={1} adjustsFontSizeToFit>{dayRevenue}</Text>
+          </View>
+          <View style={styles.dayDivider} />
+          <View style={styles.dayBoardings}>
+            <Text style={styles.dayLabel}>Embarques hoje</Text>
+            <Text style={styles.dayValue}>{dayBoardings}</Text>
+          </View>
         </View>
       </View>}
       {active && !following ? <View style={styles.recenter}>
         <Button title="Recentralizar veículo" onPress={() => setFollowing(true)} />
-      </View> : <View style={styles.card}>
+      </View> : <View style={active ? styles.card : styles.homeAction}>
         {!!error && !panel && secureError}
         {active ? <>
           <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Recolher ações' : 'Expandir ações'}
@@ -302,20 +310,11 @@ function Operation() {
               disabled={busy} onPress={() => void run(() => enableTracking(active))} />}
           </>}
         </> : <>
-          <Text style={styles.label}>Sem jornada ativa</Text>
-          <View style={styles.periodRow}>
-            <View style={styles.segment}>
-              {[['day', 'Hoje'], ['month', 'Mês']].map(([key, label]) => <Pressable key={key} accessibilityRole="button"
-                accessibilityState={{ selected: period === key }} onPress={() => setPeriod(key)}
-                style={[styles.segmentButton, period === key && styles.segmentSelected]}>
-                <Text style={styles.segmentLabel}>{label}</Text>
-              </Pressable>)}
-            </View>
-            <IconButton icon="chart" label="Abrir gráfico de lucro por dia" onPress={() => show('report')} />
-          </View>
-          <View style={styles.idleStats}>{statsContent}</View>
-          <Button title={data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veículo'}
-            onPress={() => show(!data.vehicles.length ? 'vehicle' : !data.defaults.defaultPointA ? 'route' : 'start')} />
+          <Pressable accessibilityRole="button" style={({ pressed }) => [ui.button, styles.homeStart, pressed && ui.dim]}
+            onPress={() => show(!data.vehicles.length ? 'vehicle' : !data.defaults.defaultPointA ? 'route' : 'start')}>
+            <Icon name="route" color="#fff" size={22} />
+            <Text style={ui.buttonText}>{data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veículo'}</Text>
+          </Pressable>
         </>}
       </View>}
     </SafeAreaView>
@@ -427,7 +426,6 @@ const styles = StyleSheet.create({
   label: { color: '#142d24', fontWeight: '800' },
   overlay: { ...StyleSheet.absoluteFill, justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 8 },
   card: { borderRadius: 19, padding: 12, gap: 7, backgroundColor: '#fff', elevation: 4 },
-  cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 18, backgroundColor: '#fff', padding: 8 },
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4, flexWrap: 'wrap' },
   stats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, gap: 4, borderRadius: 15, backgroundColor: '#13392e' },
@@ -440,13 +438,17 @@ const styles = StyleSheet.create({
   closingMetrics: { flexDirection: 'row', paddingVertical: 12, backgroundColor: '#edf4f0', borderRadius: 12, gap: 5 },
   closingDetails: { backgroundColor: '#f6faf8', borderRadius: 12, padding: 10, gap: 5 },
   closingRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 5, gap: 10 },
-  headerActions: { flexDirection: 'row', gap: 5 },
-  periodRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  segment: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#edf4f0' },
-  segmentButton: { minHeight: 34, paddingHorizontal: 13, borderRadius: 8, justifyContent: 'center' },
-  segmentSelected: { backgroundColor: '#fff', elevation: 1 },
-  segmentLabel: { color: '#0b5a48', fontWeight: '700' },
-  idleStats: { flexDirection: 'row', gap: 5, paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#dbe9e2' },
+  homeTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  floatingMenu: { backgroundColor: '#edf4f0', borderRadius: 13, elevation: 4 },
+  dayBubble: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 16,
+    paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#e4ede8', elevation: 4 },
+  dayMetric: { flexShrink: 1, minWidth: 58, gap: 2 },
+  dayBoardings: { gap: 2 },
+  dayDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: '#dbe9e2' },
+  dayLabel: { color: '#526a60', fontSize: 11, fontWeight: '600' },
+  dayValue: { color: '#15362f', fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  homeAction: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4ede8', borderRadius: 17, padding: 7, gap: 6, elevation: 4 },
+  homeStart: { minHeight: 52, flexDirection: 'row', gap: 8 },
   drawer: { gap: 5 },
   grip: { alignSelf: 'center', width: 32, height: 4, borderRadius: 4, backgroundColor: '#a0b8ad' },
   destinationRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 3 },
