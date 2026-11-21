@@ -39,7 +39,7 @@ function PreviewRouteHighlight({ road }: { road: RoadLine }) {
     strokeColor={band.color} strokeWidth={band.width} lineCap="round" lineJoin="round" zIndex={3 + index} />)}</>
 }
 
-export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, waitingStop, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
+export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, waitingStop, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
   const [ready, setReady] = useState(false)
@@ -78,7 +78,7 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
     </Marker>)}
     {active && current && <Marker coordinate={current} title="Seu veículo" anchor={{ x: .5, y: .5 }}>
-      <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} />
+      <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
     </Marker>}
   </MapView>
 }

@@ -39,6 +39,11 @@ test('isolates accounts and computes the net result of a round trip', async () =
       const { cookie: first } = await call('register', { name: 'Primeira', email: 'first@example.test', password })
       const { cookie: second } = await call('register', { name: 'Segunda', email: 'second@example.test', password })
       assert(first && second)
+      await call('settings/profile', { carColor: '#d54752' }, undefined, 401)
+      await call('settings/profile', { carColor: '#ffffff' }, first, 422)
+      await call('settings/profile', { carColor: '#d54752' }, first)
+      assert.equal((await call('dashboard', undefined, first)).result.user.carColor, '#d54752')
+      assert.equal((await call('dashboard', undefined, second)).result.user.carColor, null)
       await call('addresses?q=Rua%20Dom%20Bosco', undefined, undefined, 401)
       await call('addresses?q=Ru', undefined, first, 422)
       const fetchAddress = globalThis.fetch

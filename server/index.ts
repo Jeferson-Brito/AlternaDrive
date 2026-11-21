@@ -11,6 +11,7 @@ import { combinedEfficiency } from './vehicle-efficiency'
 import { chartPeriods, dailyProfit, nextReportingDay, periods, summarize } from './finance'
 import { nearbyDrivers, removeDriver } from './driver-presence'
 import { closestServedStop, findStops, stopDemand, updateWaiting } from './passenger-presence'
+import { carColors } from '../src/car-colors'
 import { findAddresses } from '../src/address-search'
 import { distanceMeters, isArrival } from '../src/arrival'
 import { habitualRoute, routeCheckpoints } from '../src/route-geometry'
@@ -35,7 +36,7 @@ const journeyDefaults = {
   defaultFare: true, defaultOrigin: true, defaultDestination: true, defaultPointA: true, defaultPointB: true,
 } as const
 const id = z.string().cuid()
-const userFields = { id: true, name: true, email: true }
+const userFields = { id: true, name: true, email: true, carColor: true }
 const app = express()
 if (production) app.set('trust proxy', 1)
 app.disable('x-powered-by')
@@ -52,7 +53,7 @@ app.get('/api/health', async (_req, res) => {
   res.json({ ok: true })
 })
 
-type PublicUser = { id: string; email: string; name: string }
+type PublicUser = { id: string; email: string; name: string; carColor: string | null }
 async function login(req: express.Request, res: express.Response, user: PublicUser) {
   const token = randomBytes(32).toString('hex')
   await prisma.session.create({ data: { id: hash(token), userId: user.id, expiresAt: new Date(Date.now() + lifetime) } })
@@ -94,7 +95,7 @@ app.post('/api/login', authLimit, async (req, res) => {
     res.status(401).json({ error: 'E-mail ou senha incorretos.' })
     return
   }
-  await login(req, res, { id: user.id, name: user.name, email: user.email })
+  await login(req, res, { id: user.id, name: user.name, email: user.email, carColor: user.carColor })
 })
 app.post('/api/logout', async (req, res) => {
   const token = sessionId(req)
@@ -257,6 +258,13 @@ app.post('/api/vehicles/:id/fuel-reference', async (req, res) => {
   })
   if (!saved) return res.status(404).json({ error: 'Veículo indisponível.' })
   res.json({ ok: true })
+})
+app.post('/api/settings/profile', async (req, res) => {
+  const { carColor } = z.object({
+    carColor: z.string().refine(value => carColors.some(color => color.value === value)),
+  }).parse(req.body)
+  const user = await prisma.user.update({ where: { id: res.locals.user.id }, data: { carColor }, select: userFields })
+  res.json(user)
 })
 app.post('/api/settings/journey', async (req, res) => {
   const { defaultPointA, defaultPointB, ...fields } = z.object({

@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native'
+import { defaultCarColor } from '../../src/car-colors'
 import Svg, { Path, Rect } from 'react-native-svg'
 
-export function DriverMarker({ motorcycle, nearby = false }: { motorcycle?: boolean; nearby?: boolean }) {
+export function DriverMarker({ motorcycle, nearby = false, carColor }: { motorcycle?: boolean; nearby?: boolean; carColor?: string | null }) {
   return <View collapsable={false} accessible accessibilityLabel={nearby ? (motorcycle ? 'Moto próxima' : 'Carro próximo') : motorcycle ? 'Sua moto' : 'Seu carro'}
     style={nearby ? styles.nearby : styles.marker}>
     <Svg width={nearby ? 17 : 34} height={nearby ? 23 : 46} viewBox="0 0 34 46">
@@ -14,7 +15,7 @@ export function DriverMarker({ motorcycle, nearby = false }: { motorcycle?: bool
       </> : <>
         <Path d="M6 13v7m22-7v7M6 30v7m22-7v7" stroke="#18343e" strokeWidth={6} strokeLinecap="round" />
         <Path d="M17 3c8 0 11 5 11 11v20c0 6-4 9-11 9S6 40 6 34V14C6 8 9 3 17 3Z"
-          fill={nearby ? "#227f69" : "#24a7cc"} stroke="#fff" strokeWidth={2.5} />
+          fill={carColor ?? (nearby ? "#227f69" : defaultCarColor)} stroke="#fff" strokeWidth={2.5} />
         <Path d="M10 16c3-3 11-3 14 0l-2 6H12Zm2 10h10l2 7c-4 2-10 2-14 0Z" fill="#193c4c" />
         <Path d="M11 10l2-1m8 0 2 1" stroke="#e4fbff" strokeWidth={2} strokeLinecap="round" />
         <Path d="M11 37h2m8 0h2" stroke="#c93146" strokeWidth={2} strokeLinecap="round" />

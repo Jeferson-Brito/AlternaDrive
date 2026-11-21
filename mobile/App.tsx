@@ -12,6 +12,8 @@ import { VehicleForm } from './src/VehicleForm'
 import { RouteForm } from './src/RouteForm'
 import { Icon, IconButton, Metric, Shortcut } from './src/operation-ui'
 import { Passenger, usePassengerDemand } from './src/Passenger'
+import { DriverMarker } from './src/DriverMarker'
+import { carColors, defaultCarColor } from '../src/car-colors'
 import { Report } from './src/Report'
 import { useNearbyDrivers } from './src/nearby-drivers'
 import { useRoadRoute } from './src/road-route'
@@ -19,9 +21,9 @@ import { type Boarding, type Closing, type Dashboard, type Place, money, numeric
 import { onArrival, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
 import { workDuration } from '../src/journey-time'
 
-type Panel = 'closing' | 'report' | 'menu' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
+type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
-  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
+  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', profile: 'Perfil do motorista', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
   group: 'Registrar grupo', finish: 'Finalizar jornada', fuel: 'Abastecimento', expense: 'Registrar despesa',
 }
 
@@ -48,6 +50,7 @@ function Operation() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [profileColor, setProfileColor] = useState<string>(defaultCarColor)
   const [panel, setPanel] = useState<Panel | null>(null)
   const [hide, setHide] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -154,6 +157,7 @@ function Operation() {
   function show(next: Panel | null) {
     Keyboard.dismiss()
     setPanel(next)
+    if (next === 'profile') setProfileColor(data?.user.carColor ?? defaultCarColor)
     setError('')
     setFirst(next === 'route' && data?.defaults.defaultFare ? (data.defaults.defaultFare / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '')
     setSecond('')
@@ -247,7 +251,7 @@ function Operation() {
 
   return <View style={styles.root}>
     <JourneyMap a={routeA} b={routeB} active={active ?? null} route={route}
-      following={following} onExplore={() => setFollowing(false)} drivers={drivers} demand={demand} />
+      following={following} onExplore={() => setFollowing(false)} drivers={drivers} demand={demand} carColor={data.user.carColor} />
     <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
       {active ? <View style={styles.stats}>
         <Metric label="Embarques" value={dayBoardings} dark />
@@ -379,7 +383,36 @@ function Operation() {
                 <Button title="Voltar ao mapa" onPress={() => show(null)} />
               </>}
               {panel === 'report' && <Report token={token} />}
+              {panel === 'profile' && <>
+                <View style={styles.profileCard}>
+                  <View style={styles.profileIcon}><DriverMarker carColor={profileColor} /></View>
+                  <Text style={styles.title}>{data.user.name}</Text>
+                </View>
+                <Text style={styles.label}>Cor do carro no mapa</Text>
+                <View style={styles.colorGrid}>
+                  {carColors.map(color => <Pressable key={color.value} accessibilityRole="radio"
+                    accessibilityState={{ selected: profileColor === color.value, disabled: busy }} disabled={busy}
+                    onPress={() => setProfileColor(color.value)}
+                    style={[styles.colorOption, profileColor === color.value && styles.selectedColor]}>
+                    <View style={[styles.colorSwatch, { backgroundColor: color.value }]} />
+                    <Text style={styles.label}>{color.name}</Text>
+                  </Pressable>)}
+                </View>
+                {submit('Salvar cor', async () => {
+                  const profile = await api<Dashboard['user']>('settings/profile', { carColor: profileColor }, token)
+                  dashboardRevision.current++
+                  setData(current => current ? { ...current, user: profile } : current)
+                  show('menu')
+                }, profileColor === (data.user.carColor ?? defaultCarColor))}
+              </>}
               {panel === 'menu' && <>
+                <View style={styles.profileCard}>
+                  <View style={styles.profileIcon}><DriverMarker carColor={data.user.carColor} /></View>
+                  <View style={styles.profileDetails}>
+                    <Text style={styles.title} numberOfLines={2}>{data.user.name}</Text>
+                    <Button secondary title="Ver perfil" onPress={() => show('profile')} />
+                  </View>
+                </View>
                 <Button secondary title="Lucro por dia" onPress={() => show('report')} />
                 <Button secondary title="Percurso e tarifa" onPress={() => show('route')} />
                 <Button secondary title="Cadastrar veículo" onPress={() => show('vehicle')} />
@@ -448,6 +481,13 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  profileCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: '#eff6f2' },
+  profileIcon: { width: 58, height: 62, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#deeee6' },
+  profileDetails: { flex: 1, gap: 6 },
+  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  colorOption: { flexBasis: '46%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46, paddingHorizontal: 10, borderWidth: 2, borderColor: '#e0ebe5', borderRadius: 10 },
+  selectedColor: { borderColor: '#0b5a48', backgroundColor: '#eff6f2' },
+  colorSwatch: { width: 21, height: 21, borderRadius: 11 },
   root: { flex: 1, backgroundColor: '#dbe9e2' },
   keyboard: { flex: 1 },
   login: { flex: 1, paddingBottom: 36 },

@@ -74,6 +74,7 @@ export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & {
   onExplore: () => void
   drivers: NearbyDriver[]
   demand?: StopDemand[]
+  carColor?: string | null
   passengerCenter?: Point
   waitingStop?: Omit<StopDemand, 'count'>
 }

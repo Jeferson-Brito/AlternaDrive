@@ -28,7 +28,7 @@ function NativeRouteHighlight({ road }: { road: RoadLine }) {
   </GeoJSONSource>)}</>
 }
 
-export function JourneyMap({ a, b, active, route, following, onExplore, drivers, demand = [], passengerCenter, waitingStop }: RouteView) {
+export function JourneyMap({ a, b, active, route, following, onExplore, drivers, demand = [], passengerCenter, carColor, waitingStop }: RouteView) {
   const camera = useRef<CameraRef>(null)
   const { height } = useWindowDimensions()
   const [loaded, setLoaded] = useState(false)
@@ -74,7 +74,7 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
         </View>
       </ViewAnnotation>)}
       {active && current && <ViewAnnotation id="driver" lngLat={coords(current)}>
-        <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} />
+        <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
       </ViewAnnotation>}
     </Map>
     {!active && (routeError || estimate) && <View pointerEvents="none" style={styles.status}>

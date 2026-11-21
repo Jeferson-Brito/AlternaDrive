@@ -10,7 +10,7 @@ export type Journey = {
 }
 export type Summary = { period: string; passengers: number; revenue: number; profit: number | null }
 export type Dashboard = {
-  user: { name: string }
+  user: { name: string; carColor?: string | null }
   vehicles: { id: string; name: string }[]
   defaults: { defaultOrigin: string | null; defaultDestination: string | null; defaultFare: number | null; defaultPointA: Point | null; defaultPointB: Point | null }
   active: Journey | null
