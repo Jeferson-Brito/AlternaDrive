@@ -19,7 +19,8 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
-      ]
+      ],
+      "./plugins/with-windows-build-paths"
     ],
     "icon": "./assets/alternadrive.png"
   }

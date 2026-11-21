@@ -82,6 +82,7 @@ de manter os dados antigos. O APK recebe apenas a URL pública do Render.
 ### Rodar no Android
 
 No computador, configure um JDK 17, o Android SDK e o Gradle pelo Android Studio.
+No Windows, mantenha o clone em um caminho curto, como `C:/dev/AlternaDrive`, para a compilação nativa.
 Na pasta do repositório, use dois terminais:
 
 - Para testar a API local, rode `npm ci`, `npm run db:setup` e `npm run dev:mobile`.
