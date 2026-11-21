@@ -2,31 +2,33 @@ import { useEffect, useMemo, useState } from 'react'
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
 import { loadModels, nameAndYear, searchVehicles, type VehicleSpec } from '../../src/vehicle-catalog-search'
 import { Button, Field, NumberField, ui } from './controls'
-import { numeric } from './model'
+import { numeric, type Vehicle } from './model'
 
 type VehicleInput = {
   name: string; type: 'car' | 'motorcycle'; fuel: string; tank: number | null; cityEfficiency: number
   highwayEfficiency?: number; urbanShare: number; capacity: number; catalogId?: string
 }
 const fuels = ['Gasolina', 'Etanol', 'Diesel', 'GNV']
-const decimal = (value?: number) => value === undefined ? '' : value.toFixed(2).replace('.', ',')
+const decimal = (value?: number | null) => value == null ? '' : String(value).replace('.', ',')
 
-export function VehicleForm({ busy, save }: { busy: boolean; save: (vehicle: VehicleInput) => void }) {
-  const [type, setType] = useState<'car' | 'motorcycle'>('car')
-  const [year, setYear] = useState('')
-  const [name, setName] = useState('')
+export function VehicleForm({ busy, save, vehicle }: { busy: boolean; save: (vehicle: VehicleInput) => void; vehicle?: Vehicle }) {
+  const initialName = vehicle?.name.match(/^(.*?) · (\d{4})$/)
+  const [type, setType] = useState<'car' | 'motorcycle'>(vehicle?.type ?? 'car')
+  const [year, setYear] = useState(initialName?.[2] ?? '')
+  const [name, setName] = useState(initialName?.[1] ?? vehicle?.name ?? '')
+  const [catalogId, setCatalogId] = useState(vehicle?.catalogId ?? undefined)
   const [selected, setSelected] = useState<VehicleSpec>()
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof loadModels>>>([])
   const [unavailable, setUnavailable] = useState(false)
-  const [fuel, setFuel] = useState('Gasolina')
-  const [tank, setTank] = useState('')
-  const [city, setCity] = useState('')
-  const [highway, setHighway] = useState('')
-  const [capacity, setCapacity] = useState('')
-  const [urbanShare, setUrbanShare] = useState(100)
+  const [fuel, setFuel] = useState(vehicle?.fuel ?? 'Gasolina')
+  const [tank, setTank] = useState(decimal(vehicle?.tank))
+  const [city, setCity] = useState(decimal(vehicle?.cityEfficiency ?? vehicle?.efficiency))
+  const [highway, setHighway] = useState(decimal(vehicle?.highwayEfficiency))
+  const [capacity, setCapacity] = useState(vehicle ? String(vehicle.capacity) : '')
+  const [urbanShare, setUrbanShare] = useState(vehicle?.urbanShare ?? 100)
   useEffect(() => { void loadModels().then(setCatalog, () => setUnavailable(true)) }, [])
-  const options = useMemo(() => selected ? [] : searchVehicles(name, year.length === 4 ? year : '', type, catalog).slice(0, 8),
-    [name, year, type, catalog, selected])
+  const options = useMemo(() => catalogId ? [] : searchVehicles(name, year.length === 4 ? year : '', type, catalog).slice(0, 8),
+    [name, year, type, catalog, catalogId])
 
   function setReference(item: VehicleSpec | undefined, selectedFuel: string) {
     setFuel(selectedFuel)
@@ -37,7 +39,8 @@ export function VehicleForm({ busy, save }: { busy: boolean; save: (vehicle: Veh
   function select(item: VehicleSpec) {
     Keyboard.dismiss()
     setSelected(item)
-    setName(nameAndYear(item).slice(0, 100))
+    setCatalogId(item.id)
+    setName(nameAndYear(item).replace(/ · \d{4}$/, '').slice(0, 100))
     setYear(String(item.year))
     const nextFuel = item.fuel ?? (item.consumption?.[fuel] ? fuel : Object.keys(item.consumption ?? {})[0]) ?? fuel
     setTank(nextFuel === 'GNV' ? '' : decimal(item.tank))
@@ -45,6 +48,7 @@ export function VehicleForm({ busy, save }: { busy: boolean; save: (vehicle: Veh
   }
 
   function clearReference() {
+    setCatalogId(undefined)
     if (!selected) return
     setSelected(undefined)
     setTank('')
@@ -103,11 +107,11 @@ export function VehicleForm({ busy, save }: { busy: boolean; save: (vehicle: Veh
         secondary={item.share !== urbanShare} onPress={() => setUrbanShare(item.share)} />)}</View>
     </>}
     {type === 'car' && <NumberField label="Lugares para passageiros" value={capacity} onChange={setCapacity} />}
-    <Button title={busy ? 'Aguarde…' : 'Cadastrar veículo'}
+    <Button title={busy ? 'Aguarde…' : vehicle ? 'Salvar veículo' : 'Cadastrar veículo'}
       disabled={busy || !name.trim() || !(cityEfficiency > 0) || !(passengerCapacity >= 1)}
       onPress={() => save({
-        name, type, fuel, tank: tank ? numeric(tank) : null, cityEfficiency, highwayEfficiency,
-        urbanShare, capacity: passengerCapacity, catalogId: selected?.id,
+        name: year.length === 4 ? name.trim().slice(0, 93) + ' · ' + year : name, type, fuel, tank: tank ? numeric(tank) : null, cityEfficiency, highwayEfficiency,
+        urbanShare, capacity: passengerCapacity, catalogId,
       })} />
   </View>
 }

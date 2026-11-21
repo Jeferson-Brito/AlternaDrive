@@ -9,9 +9,13 @@ export type Journey = {
   boardings: Boarding[]; pointA: Point | null; pointB: Point | null; fare: number; vehicle: { name: string; type: string }
 }
 export type Summary = { period: string; passengers: number; revenue: number; profit: number | null }
+export type Vehicle = {
+  id: string; name: string; type: 'car' | 'motorcycle'; fuel: string; tank: number | null; capacity: number
+  efficiency: number; cityEfficiency: number | null; highwayEfficiency: number | null; urbanShare: number; catalogId: string | null
+}
 export type Dashboard = {
-  user: { name: string; carColor?: string | null }
-  vehicles: { id: string; name: string }[]
+  user: { name: string; email: string; carColor?: string | null }
+  vehicles: Vehicle[]
   defaults: { defaultOrigin: string | null; defaultDestination: string | null; defaultFare: number | null; defaultPointA: Point | null; defaultPointB: Point | null }
   active: Journey | null
   nextReportingDay: string

@@ -228,19 +228,38 @@ app.get('/api/reports/daily-profit', async (req, res) => {
   if (!series) return res.status(422).json({ error: 'Escolha um intervalo de até 366 dias, com término até hoje.' })
   res.json(series)
 })
-app.post('/api/vehicles', async (req, res) => {
-  const data = z.object({
+const vehicleInput = z.object({
     name: label, type: z.enum(['car', 'motorcycle']).default('car'), fuel: z.enum(['Gasolina', 'Etanol', 'Diesel', 'GNV']),
     tank: positive.nullable(), efficiency: positive.optional(), cityEfficiency: positive.optional(),
     highwayEfficiency: positive.optional(), urbanShare: z.number().int().min(0).max(100).default(100),
     catalogId: z.string().min(1).max(100).optional(), capacity: z.number().int().min(1).max(100).optional(),
-  }).parse(req.body)
+})
+function vehicleDetails(data: z.infer<typeof vehicleInput>) {
   const capacity = data.type === 'motorcycle' ? 1 : data.capacity
   const { cityEfficiency, highwayEfficiency, urbanShare, ...vehicle } = data
   const efficiency = cityEfficiency === undefined ? data.efficiency : combinedEfficiency(cityEfficiency, highwayEfficiency, urbanShare)
-  if (efficiency === undefined) return res.status(422).json({ error: 'Informe o consumo do veículo.' })
-  if (!capacity) return res.status(422).json({ error: 'Informe quantos passageiros cabem no veículo.' })
-  res.status(201).json(await prisma.vehicle.create({ data: { ...vehicle, capacity, efficiency, cityEfficiency, highwayEfficiency, urbanShare, userId: res.locals.user.id } }))
+  if (efficiency === undefined) return { error: 'Informe o consumo do veículo.' } as const
+  if (!capacity) return { error: 'Informe quantos passageiros cabem no veículo.' } as const
+  return { data: { ...vehicle, capacity, efficiency, cityEfficiency: cityEfficiency ?? null,
+    highwayEfficiency: highwayEfficiency ?? null, catalogId: data.catalogId ?? null, urbanShare } } as const
+}
+app.post('/api/vehicles', async (req, res) => {
+  const details = vehicleDetails(vehicleInput.parse(req.body))
+  if ('error' in details) return res.status(422).json({ error: details.error })
+  res.status(201).json(await prisma.vehicle.create({ data: { ...details.data, userId: res.locals.user.id } }))
+})
+app.post('/api/vehicles/:id/edit', async (req, res) => {
+  const details = vehicleDetails(vehicleInput.parse(req.body))
+  if ('error' in details) return res.status(422).json({ error: details.error })
+  const where = { id: id.parse(req.params.id), userId: res.locals.user.id as string }
+  const result = await prisma.vehicle.updateMany({
+    where: { ...where, journeys: { none: { activeUserId: where.userId } } }, data: details.data,
+  })
+  if (!result.count) {
+    if (!await prisma.vehicle.count({ where })) return res.status(404).json({ error: 'Veículo indisponível.' })
+    return res.status(409).json({ error: 'Finalize a jornada para editar este veículo.' })
+  }
+  res.json({ ok: true })
 })
 app.post('/api/vehicles/:id/fuel-reference', async (req, res) => {
   const { price } = z.object({ price: unitPrice.nullable() }).parse(req.body)
@@ -260,11 +279,32 @@ app.post('/api/vehicles/:id/fuel-reference', async (req, res) => {
   res.json({ ok: true })
 })
 app.post('/api/settings/profile', async (req, res) => {
-  const { carColor } = z.object({
-    carColor: z.string().refine(value => carColors.some(color => color.value === value)),
-  }).parse(req.body)
-  const user = await prisma.user.update({ where: { id: res.locals.user.id }, data: { carColor }, select: userFields })
+  const data = z.object({
+    name: label.optional(),
+    carColor: z.string().refine(value => carColors.some(color => color.value === value)).optional(),
+  }).refine(values => values.name !== undefined || values.carColor !== undefined).parse(req.body)
+  const user = await prisma.user.update({ where: { id: res.locals.user.id }, data, select: userFields })
   res.json(user)
+})
+app.post('/api/settings/password', authLimit, async (req, res) => {
+  const { currentPassword, newPassword } = z.object({ currentPassword: secret, newPassword: secret })
+    .refine(values => values.currentPassword !== values.newPassword).parse(req.body)
+  const userId = res.locals.user.id as string
+  const { password } = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { password: true } })
+  const [salt, expected] = password.split(':')
+  const current = await derive(currentPassword, salt, 64) as Buffer
+  if (!timingSafeEqual(current, Buffer.from(expected, 'hex'))) {
+    return res.status(422).json({ error: 'A senha atual está incorreta.' })
+  }
+  const nextSalt = randomBytes(16).toString('hex')
+  const next = await derive(newPassword, nextSalt, 64) as Buffer
+  const saved = await prisma.$transaction(async tx => {
+    const result = await tx.user.updateMany({ where: { id: userId, password }, data: { password: nextSalt + ':' + next.toString('hex') } })
+    if (result.count) await tx.session.deleteMany({ where: { userId, id: { not: sessionId(req)! } } })
+    return result.count > 0
+  })
+  if (!saved) return res.status(409).json({ error: 'A senha mudou durante a operação. Tente novamente.' })
+  res.json({ ok: true })
 })
 app.post('/api/settings/journey', async (req, res) => {
   const { defaultPointA, defaultPointB, ...fields } = z.object({

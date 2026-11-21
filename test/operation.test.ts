@@ -244,6 +244,23 @@ test('isolates accounts and computes the net result of a round trip', async () =
       const otherChart = (await call('reports/daily-profit?period=month', undefined, second)).result
       assert(otherChart.points.every((point: { profit: number }) => point.profit === 0))
       await call('reports/daily-profit?period=custom&start=2026-02-30&end=2026-03-01', undefined, first, 422)
+      const edit = { name: 'Van atualizada', fuel: 'Gasolina', tank: 60, cityEfficiency: 12, capacity: 8 }
+      await call('vehicles/' + vehicle.id + '/edit', edit, second, 404)
+      await call('vehicles/' + referenceVehicle.id + '/edit', edit, first, 409)
+      await call('vehicles/' + vehicle.id + '/edit', edit, first)
+      const updated = (await call('dashboard', undefined, first)).result
+      assert.equal(updated.vehicles.find((item: { id: string }) => item.id === vehicle.id).efficiency, 12)
+      assert.equal(updated.history.find((item: { vehicleId: string }) => item.vehicleId === vehicle.id).efficiency, 10)
+      await call('settings/profile', { name: 'Segunda motorista' }, second)
+      const { cookie: oldSession } = await call('login', { email: 'second@example.test', password })
+      assert(oldSession)
+      const newPassword = 'new-test-password'
+      await call('settings/password', { currentPassword: 'wrong-password', newPassword }, second, 422)
+      await call('settings/password', { currentPassword: password, newPassword }, second)
+      await call('dashboard', undefined, oldSession, 401)
+      assert.equal((await call('dashboard', undefined, second)).result.user.name, 'Segunda motorista')
+      await call('login', { email: 'second@example.test', password }, undefined, 401)
+      await call('login', { email: 'second@example.test', password: newPassword })
       await call('logout', {}, first)
       await call('dashboard', undefined, first, 401)
       const { cookie: signedIn } = await call('login', { email: 'first@example.test', password })

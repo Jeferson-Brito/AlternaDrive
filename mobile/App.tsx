@@ -21,9 +21,9 @@ import { type Boarding, type Closing, type Dashboard, type Place, money, numeric
 import { onArrival, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
 import { workDuration } from '../src/journey-time'
 
-type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
+type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'password' | 'editVehicle' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
-  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', profile: 'Perfil do motorista', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
+  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', profile: 'Perfil do motorista', password: 'Alterar senha', editVehicle: 'Editar veículo', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
   group: 'Registrar grupo', finish: 'Finalizar jornada', fuel: 'Abastecimento', expense: 'Registrar despesa',
 }
 
@@ -50,6 +50,12 @@ function Operation() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [profileName, setProfileName] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showProfilePasswords, setShowProfilePasswords] = useState(false)
+  const [editingVehicleId, setEditingVehicleId] = useState('')
   const [profileColor, setProfileColor] = useState<string>(defaultCarColor)
   const [panel, setPanel] = useState<Panel | null>(null)
   const [hide, setHide] = useState(false)
@@ -157,7 +163,14 @@ function Operation() {
   function show(next: Panel | null) {
     Keyboard.dismiss()
     setPanel(next)
-    if (next === 'profile') setProfileColor(data?.user.carColor ?? defaultCarColor)
+    if (next === 'profile') {
+      setProfileName(data?.user.name ?? '')
+      setProfileColor(data?.user.carColor ?? defaultCarColor)
+    }
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setShowProfilePasswords(false)
     setError('')
     setFirst(next === 'route' && data?.defaults.defaultFare ? (data.defaults.defaultFare / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '')
     setSecond('')
@@ -386,8 +399,12 @@ function Operation() {
               {panel === 'profile' && <>
                 <View style={styles.profileCard}>
                   <View style={styles.profileIcon}><DriverMarker carColor={profileColor} /></View>
-                  <Text style={styles.title}>{data.user.name}</Text>
+                  <View style={styles.profileDetails}>
+                    <Text style={styles.title}>{data.user.name}</Text>
+                    <Text style={ui.muted}>{data.user.email}</Text>
+                  </View>
                 </View>
+                <Field label="Nome" value={profileName} onChangeText={setProfileName} maxLength={100} />
                 <Text style={styles.label}>Cor do carro no mapa</Text>
                 <View style={styles.colorGrid}>
                   {carColors.map(color => <Pressable key={color.value} accessibilityRole="radio"
@@ -398,12 +415,39 @@ function Operation() {
                     <Text style={styles.label}>{color.name}</Text>
                   </Pressable>)}
                 </View>
-                {submit('Salvar cor', async () => {
-                  const profile = await api<Dashboard['user']>('settings/profile', { carColor: profileColor }, token)
+                {submit('Salvar perfil', async () => {
+                  const profile = await api<Dashboard['user']>('settings/profile', { name: profileName.trim(), carColor: profileColor }, token)
                   dashboardRevision.current++
                   setData(current => current ? { ...current, user: profile } : current)
                   show('menu')
-                }, profileColor === (data.user.carColor ?? defaultCarColor))}
+                }, !profileName.trim() || (profileName.trim() === data.user.name && profileColor === (data.user.carColor ?? defaultCarColor)))}
+                <Button secondary title="Alterar senha" onPress={() => show('password')} />
+                <Text style={styles.label}>Meus veículos</Text>
+                {data.vehicles.map(vehicle => <Button key={vehicle.id} secondary title={vehicle.name}
+                  accessibilityLabel={'Editar ' + vehicle.name} onPress={() => { setEditingVehicleId(vehicle.id); show('editVehicle') }} />)}
+                <Button secondary title="Cadastrar veículo" onPress={() => show('vehicle')} />
+              </>}
+              {panel === 'password' && <>
+                <Field label="Senha atual" value={currentPassword} onChangeText={setCurrentPassword} maxLength={128} autoCapitalize="none" secureTextEntry={!showProfilePasswords} />
+                <Field label="Nova senha" value={newPassword} onChangeText={setNewPassword} maxLength={128} autoCapitalize="none" secureTextEntry={!showProfilePasswords} />
+                <Field label="Confirme a nova senha" value={confirmPassword} onChangeText={setConfirmPassword} maxLength={128} autoCapitalize="none" secureTextEntry={!showProfilePasswords} />
+                <Button secondary title={showProfilePasswords ? 'Ocultar senhas' : 'Mostrar senhas'} onPress={() => setShowProfilePasswords(value => !value)} />
+                <Text style={ui.muted}>Use pelo menos 8 caracteres. Outros aparelhos precisarão entrar novamente.</Text>
+                {!!confirmPassword && newPassword !== confirmPassword && <Text style={ui.muted}>As senhas precisam ser iguais.</Text>}
+                {submit('Salvar nova senha', async () => {
+                  await api('settings/password', { currentPassword, newPassword }, token)
+                  show('profile')
+                }, currentPassword.length < 8 || newPassword.length < 8 || newPassword === currentPassword || newPassword !== confirmPassword)}
+                <Button secondary title="Voltar ao perfil" disabled={busy} onPress={() => show('profile')} />
+              </>}
+              {panel === 'editVehicle' && <>
+                <VehicleForm busy={busy} vehicle={data.vehicles.find(vehicle => vehicle.id === editingVehicleId)}
+                  save={vehicle => void run(async () => {
+                    await api('vehicles/' + editingVehicleId + '/edit', vehicle, token)
+                    await reload(token)
+                    show('profile')
+                  })} />
+                <Button secondary title="Voltar ao perfil" disabled={busy} onPress={() => show('profile')} />
               </>}
               {panel === 'menu' && <>
                 <View style={styles.profileCard}>
