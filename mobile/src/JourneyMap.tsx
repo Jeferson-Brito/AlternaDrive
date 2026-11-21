@@ -4,7 +4,7 @@ import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type
 import { monochromeStreets } from '../../src/map-style'
 import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
-import { useRoutePulse } from './route-pulse'
+import { useRouteHighlight } from './route-pulse'
 import { DriverMarker } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.
@@ -18,13 +18,13 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
     <Camera initialViewState={cityView} />
   </Map>
 }
-function NativeRouteLine({ road, animate }: { road: RoadLine; animate: boolean }) {
-  const pulse = useRoutePulse(animate)
-  return <GeoJSONSource id="journey" data={road}>
-    <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
+function NativeRouteHighlight({ road }: { road: RoadLine }) {
+  const highlight = useRouteHighlight(road)
+  return <>{highlight.map(band => <GeoJSONSource key={band.id} id={'journey-highlight-' + band.id}
+    data={{ type: 'LineString', coordinates: band.coordinates }}>
     <Layer type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-      paint={{ 'line-color': pulse.color, 'line-width': pulse.width }} />
-  </GeoJSONSource>
+      paint={{ 'line-color': band.color, 'line-width': band.width }} />
+  </GeoJSONSource>)}</>
 }
 
 export function JourneyMap({ a, b, active, route, following, onExplore, drivers }: RouteView) {
@@ -53,7 +53,11 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers 
     <Map style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}
       onRegionWillChange={event => { if (active && following && event.nativeEvent.userInteraction) onExplore() }}>
       <Camera ref={camera} initialViewState={cityView} />
-      {road && <NativeRouteLine road={road.geometry} animate={!active} />}
+      {road && <GeoJSONSource id="journey" data={road.geometry}>
+        <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
+        <Layer type="line" paint={{ 'line-color': '#9763f1', 'line-width': 5 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
+      </GeoJSONSource>}
+      {!active && road && <NativeRouteHighlight road={road.geometry} />}
       {a && <ViewAnnotation id="point-a" lngLat={coords(a)}><Text style={styles.pin}>A</Text></ViewAnnotation>}
       {b && <ViewAnnotation id="point-b" lngLat={coords(b)}><Text style={styles.pin}>B</Text></ViewAnnotation>}
       {drivers.map(driver => <ViewAnnotation key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)}>
