@@ -3,7 +3,7 @@ import { StyleSheet, Text, useWindowDimensions } from 'react-native'
 import MapView, { Marker, Polyline, type MapStyleElement } from 'react-native-maps'
 import { navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
-import { useRouteHighlight } from './route-pulse'
+import { useRouteHighlight } from './route-trail'
 import { DriverMarker } from './DriverMarker'
 
 const initialRegion = { latitude: -7.132, longitude: -34.871, latitudeDelta: .033, longitudeDelta: .030 }

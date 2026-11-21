@@ -38,7 +38,7 @@ export function useRouteHighlight(road: RoadLine) {
   }, [road])
 
   return useMemo(() => {
-    const length = distances.at(-1) ?? 0
+    const length = distances[distances.length - 1] ?? 0
     if (phase < 0 || !length) return []
     const head = (1.11 * phase - .015) * length
 
