@@ -1,21 +1,19 @@
-import type { ComponentProps } from 'react'
+import { lazy, Suspense, type ComponentProps } from 'react'
 import { isExpoGo } from './environment'
 import type { JourneyMap as NativeJourneyMap, LoginMap as NativeLoginMap } from './JourneyMap'
 
+const Preview = lazy(() => import('./PreviewMap').then(module => ({ default: module.PreviewMap })))
+const LiveJourney = lazy(() => import('./JourneyMap').then(module => ({ default: module.JourneyMap })))
+const LiveLogin = lazy(() => import('./JourneyMap').then(module => ({ default: module.LoginMap })))
+
 export function JourneyMap(props: ComponentProps<typeof NativeJourneyMap>) {
-  if (isExpoGo) {
-    const { PreviewMap } = require('./PreviewMap') as typeof import('./PreviewMap')
-    return <PreviewMap {...props} />
-  }
-  const Native = (require('./JourneyMap') as typeof import('./JourneyMap')).JourneyMap
-  return <Native {...props} />
+  return <Suspense fallback={null}>
+    {isExpoGo ? <Preview {...props} /> : <LiveJourney {...props} />}
+  </Suspense>
 }
 
 export function LoginMap(props: ComponentProps<typeof NativeLoginMap>) {
-  if (isExpoGo) {
-    const { PreviewMap } = require('./PreviewMap') as typeof import('./PreviewMap')
-    return <PreviewMap decorative />
-  }
-  const Native = (require('./JourneyMap') as typeof import('./JourneyMap')).LoginMap
-  return <Native {...props} />
+  return <Suspense fallback={null}>
+    {isExpoGo ? <Preview decorative /> : <LiveLogin {...props} />}
+  </Suspense>
 }

@@ -1,3 +1,3 @@
-import Constants, { ExecutionEnvironment } from 'expo-constants'
+import { isRunningInExpoGo } from 'expo'
 
-export const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+export const isExpoGo = isRunningInExpoGo() || (__DEV__ && process.env.EXPO_PUBLIC_EXPO_GO_PREVIEW === '1')
