@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LocationObject } from 'expo-location'
 import { distanceMeters } from '../../src/arrival'
 import { navigationEstimate } from '../../src/journey-time'
-import { routeProgress, type RoadLine } from '../../src/route-geometry'
+import { routeProgress, travelBearing, type RoadLine } from '../../src/route-geometry'
 import { api } from './api'
 import type { Journey, Point } from './model'
 
@@ -56,7 +56,18 @@ export function useRoadRoute({ a, b, active, position, token }: RouteInputs) {
 
   const estimate = road && navigationEstimate(road.distance, road.duration,
     active && (current?.accuracy ?? Infinity) <= 50 ? progress?.remaining ?? 1 : 1, current?.speed ?? undefined)
-  return { from, current, road, progress, routeError, routeKey, estimate }
+  const firstSegment = road?.geometry.coordinates
+  const initialBearing = firstSegment ? travelBearing(
+    { latitude: firstSegment[0][1], longitude: firstSegment[0][0] },
+    { latitude: firstSegment[1][1], longitude: firstSegment[1][0] },
+  ) : from && to ? travelBearing(from, to) : undefined
+  const heading = (current?.speed ?? 0) >= 2 && current?.heading != null && current.heading >= 0
+    ? current.heading : progress && progress.distance < 90 ? progress.bearing : initialBearing
+  return { from, current, road, routeError, routeKey, estimate, heading: heading ?? 0 }
 }
 
 export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & { route: ReturnType<typeof useRoadRoute> }
+
+export const navigationPitch = 64
+export const navigationZoom = 17.8
+export const navigationPadding = (height: number) => ({ top: Math.round(height * .28), right: 0, bottom: Math.round(height * .07), left: 0 })

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type MapProps } from '@maplibre/maplibre-react-native'
 import { monochromeStreets } from '../../src/map-style'
-import { coords, type RouteView } from './road-route'
+import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
+import { DriverMarker } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.
 const mapStyle = monochromeStreets(libertyStyle as Parameters<typeof monochromeStreets>[0]) as unknown as MapProps['mapStyle']
@@ -17,16 +18,17 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
 }
 export function JourneyMap({ a, b, active, route }: RouteView) {
   const camera = useRef<CameraRef>(null)
+  const { height } = useWindowDimensions()
   const [loaded, setLoaded] = useState(false)
-  const { from, current, road, progress, routeError, routeKey, estimate } = route
+  const { from, current, road, heading, routeError, routeKey, estimate } = route
 
   useEffect(() => {
     if (!loaded) return
     if (active) {
       const center = current ?? from
       if (center) camera.current?.easeTo({
-        center: coords(center), zoom: 17, pitch: 52, bearing: current?.heading && current.heading > 0 ? current.heading : progress?.bearing ?? 0,
-        padding: { top: 20, bottom: 175, left: 0, right: 0 }, duration: 700,
+        center: coords(center), zoom: navigationZoom, pitch: navigationPitch, bearing: heading,
+        padding: navigationPadding(height), duration: 700,
       })
     } else if (a && b) {
       camera.current?.fitBounds([Math.min(a.longitude, b.longitude), Math.min(a.latitude, b.latitude),
@@ -34,7 +36,7 @@ export function JourneyMap({ a, b, active, route }: RouteView) {
         padding: { top: 120, bottom: 190, left: 40, right: 40 }, duration: 450, pitch: 0, bearing: 0,
       })
     }
-  }, [loaded, routeKey, current, progress?.bearing])
+  }, [loaded, routeKey, current, heading, height])
 
   return <>
     <Map style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}>
@@ -46,7 +48,7 @@ export function JourneyMap({ a, b, active, route }: RouteView) {
       {a && <ViewAnnotation id="point-a" lngLat={coords(a)}><Text style={styles.pin}>A</Text></ViewAnnotation>}
       {b && <ViewAnnotation id="point-b" lngLat={coords(b)}><Text style={styles.pin}>B</Text></ViewAnnotation>}
       {active && current && <ViewAnnotation id="driver" lngLat={coords(current)}>
-        <Text accessibilityLabel="Seu veículo" style={styles.driver}>{active.vehicle.type === 'motorcycle' ? '🏍' : '🚙'}</Text>
+        <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} />
       </ViewAnnotation>}
     </Map>
     {!active && (routeError || estimate) && <View pointerEvents="none" style={styles.status}>
@@ -58,7 +60,6 @@ export function JourneyMap({ a, b, active, route }: RouteView) {
 
 const styles = StyleSheet.create({
   pin: { backgroundColor: '#0b5a48', color: 'white', textAlign: 'center', borderRadius: 13, overflow: 'hidden', width: 26, height: 26, lineHeight: 26, fontWeight: '800' },
-  driver: { fontSize: 24, backgroundColor: '#f9fffc', borderRadius: 24, borderWidth: 2, borderColor: '#0b5a48', padding: 4 },
   status: { position: 'absolute', right: 14, top: 150, borderRadius: 12, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8, elevation: 3 },
   statusLabel: { fontWeight: '700', color: '#2e2152' },
 })
