@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
-import { api } from './api'
-import { includeTypedStreetNumber, type AddressOption } from './address-options'
+import { includeTypedStreetNumber, searchRouteAddresses, type AddressOption } from './address-options'
 import { formatNumberDigits } from '../../src/localized-number'
 import type { Place } from './model'
 
@@ -67,7 +66,7 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
         }
       }, 16000)
       try {
-        const places = await api<Place[]>('addresses?q=' + encodeURIComponent(text.trim()), undefined, token, controller.signal)
+        const places = await searchRouteAddresses(text.trim(), token, controller.signal)
         if (controller.signal.aborted) return
         setMatches(places.map(place => includeTypedStreetNumber(text, place)))
         setHint(places.length ? '' : 'Sem sugestões. Tente incluir o bairro ou a cidade.')

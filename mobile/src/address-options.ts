@@ -1,3 +1,5 @@
+import { findAddresses } from '../../src/address-search'
+import { api, ApiError } from './api'
 import type { Place } from './model'
 
 export type AddressOption = Place & { approximate?: boolean }
@@ -18,4 +20,23 @@ export function includeTypedStreetNumber(query: string, place: Place): AddressOp
     label: [street + ', ' + number.toUpperCase(), ...details].join(' · ').slice(0, 240),
     approximate: true,
   }
+}
+
+export async function searchRouteAddresses(query: string, token: string, signal: AbortSignal) {
+  const proxy = new AbortController()
+  const abortProxy = () => proxy.abort()
+  signal.addEventListener('abort', abortProxy)
+  if (signal.aborted) abortProxy()
+  const timeout = setTimeout(abortProxy, 6500)
+  try {
+    return await api<Place[]>('addresses?q=' + encodeURIComponent(query), undefined, token, proxy.signal)
+  } catch (error) {
+    if (signal.aborted || (error instanceof ApiError && error.status < 500 && error.status !== 401)) throw error
+  } finally {
+    clearTimeout(timeout)
+    signal.removeEventListener('abort', abortProxy)
+  }
+  return findAddresses('api/', {
+    q: query, limit: '6', lat: '-7.132', lon: '-34.871', countrycode: 'BR',
+  }, signal)
 }
