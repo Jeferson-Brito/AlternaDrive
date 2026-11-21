@@ -15,7 +15,7 @@ import { Passenger, usePassengerDemand } from './src/Passenger'
 import { Report } from './src/Report'
 import { useNearbyDrivers } from './src/nearby-drivers'
 import { useRoadRoute } from './src/road-route'
-import { type Closing, type Dashboard, type Place, money, numeric } from './src/model'
+import { type Boarding, type Closing, type Dashboard, type Place, money, numeric } from './src/model'
 import { onArrival, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
 import { workDuration } from '../src/journey-time'
 
@@ -40,6 +40,8 @@ function Operation() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const gate = useRef(false)
+  const dashboardRevision = useRef(0)
+  const [pendingBoarding, setPendingBoarding] = useState(0)
   const [passenger, setPassenger] = useState(false)
   const [register, setRegister] = useState(false)
   const [visiblePassword, setVisiblePassword] = useState(false)
@@ -63,8 +65,9 @@ function Operation() {
 
   const reload = useCallback(async (session: string) => {
     try {
+      const revision = dashboardRevision.current
       const dashboard = await api<Dashboard>('dashboard', undefined, session)
-      setData(dashboard)
+      if (revision === dashboardRevision.current) setData(dashboard)
       return dashboard
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 401) {
@@ -231,8 +234,8 @@ function Operation() {
 
   const stats = data.summaries.find(item => item.period === 'day')
   const destination = active ? (active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
-  const dayRevenue = hide ? '••••' : money(stats?.revenue ?? 0)
-  const dayBoardings = stats?.passengers ?? 0
+  const dayRevenue = hide ? '••••' : money((stats?.revenue ?? 0) + pendingBoarding * (active?.fare ?? 0))
+  const dayBoardings = (stats?.passengers ?? 0) + pendingBoarding
   const vehicles = data.vehicles.map(vehicle => <Button key={vehicle.id} secondary={vehicle.id !== vehicleId}
     title={vehicle.name} onPress={() => setVehicleId(vehicle.id)} />)
   const submit = (title: string, action: () => Promise<void>, invalid = false) =>
@@ -291,8 +294,29 @@ function Operation() {
           <Pressable accessibilityRole="button" disabled={busy} accessibilityLabel={'Registrar passageiro por ' + money(active.fare)}
             style={({ pressed }) => [ui.button, styles.passenger, (pressed || busy) && ui.dim]}
             onPress={() => void run(async () => {
-              await api('journeys/' + active.id + '/boardings', { count: 1 }, token)
-              await reload(token)
+              setPendingBoarding(1)
+              try {
+                const boarding = await api<Boarding>('journeys/' + active.id + '/boardings', { count: 1 }, token)
+                dashboardRevision.current++
+                setData(current => {
+                  if (!current || current.active?.id !== active.id || current.active.boardings.some(item => item.id === boarding.id)) return current
+                  const cutoff = Date.parse(current.nextReportingDay)
+                  const time = Date.parse(boarding.createdAt)
+                  const belongsToToday = time < cutoff && time >= cutoff - 86_400_000
+                  const revenue = boarding.count * boarding.fare
+                  return {
+                    ...current,
+                    active: { ...current.active, boardings: [boarding, ...current.active.boardings] },
+                    summaries: belongsToToday ? current.summaries.map(summary => summary.period === 'day' ? {
+                      ...summary, passengers: summary.passengers + boarding.count, revenue: summary.revenue + revenue,
+                      profit: summary.profit === null ? null : summary.profit + revenue,
+                    } : summary) : current.summaries,
+                  }
+                })
+                void reload(token).catch(() => undefined)
+              } finally {
+                setPendingBoarding(0)
+              }
             })}>
             <Icon name="plus" color="#fff" size={24} />
             <Text style={ui.buttonText}>Passageiro</Text>
