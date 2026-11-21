@@ -81,6 +81,11 @@ de manter os dados antigos. O APK recebe apenas a URL pública do Render.
 
 ### Rodar no Android
 
+Para testar as telas no Expo Go, aponte `mobile/.env.local` para a API HTTPS do Render e execute
+`npm start -- --go --lan` na pasta `mobile`. Abra no celular o endereço `exp://` informado no terminal,
+com ambos os aparelhos na mesma rede. Essa prévia usa Google Maps e localização com o app aberto.
+O APK próprio usa MapLibre Native e é necessário para testar localização com a tela bloqueada.
+
 No computador, configure um JDK 17, o Android SDK e o Gradle pelo Android Studio.
 No Windows, mantenha o clone em um caminho curto, como `C:/dev/AlternaDrive`, para a compilação nativa.
 Na pasta do repositório, use dois terminais:

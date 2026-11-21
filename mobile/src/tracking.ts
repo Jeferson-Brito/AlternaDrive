@@ -2,6 +2,7 @@ import * as Location from 'expo-location'
 import * as SecureStore from 'expo-secure-store'
 import * as TaskManager from 'expo-task-manager'
 import { isArrival, distanceMeters } from '../../src/arrival'
+import { isExpoGo } from './environment'
 import { api, readSession } from './api'
 import type { Journey, Point } from './model'
 
@@ -64,17 +65,18 @@ export function recordForegroundLocation(location: Location.LocationObject) {
   void enqueue([location])
 }
 
-TaskManager.defineTask<{ locations: Location.LocationObject[] }>(taskName, async ({ data, error }) => {
+if (!isExpoGo) TaskManager.defineTask<{ locations: Location.LocationObject[] }>(taskName, async ({ data, error }) => {
   if (!error && data?.locations.length) return enqueue(data.locations)
 })
 
 export async function startTracking(journey: Tracking) {
   const foreground = await Location.requestForegroundPermissionsAsync()
-  if (!foreground.granted) return false
+  if (!foreground.granted) return 'denied'
   const { id, pointA, pointB, arrivals } = journey
   await SecureStore.setItemAsync(journeyKey, JSON.stringify({ id, pointA, pointB, arrivals }))
+  if (isExpoGo) return 'foreground'
   const background = await Location.requestBackgroundPermissionsAsync()
-  if (!background.granted) return false
+  if (!background.granted) return 'foreground'
   if (!(await Location.hasStartedLocationUpdatesAsync(taskName))) {
     await Location.startLocationUpdatesAsync(taskName, {
       accuracy: Location.Accuracy.High, timeInterval: 4000, distanceInterval: 10,
@@ -85,10 +87,10 @@ export async function startTracking(journey: Tracking) {
       },
     })
   }
-  return true
+  return 'background'
 }
 
 export async function stopTracking() {
   await SecureStore.deleteItemAsync(journeyKey)
-  if (await Location.hasStartedLocationUpdatesAsync(taskName)) await Location.stopLocationUpdatesAsync(taskName)
+  if (!isExpoGo && await Location.hasStartedLocationUpdatesAsync(taskName)) await Location.stopLocationUpdatesAsync(taskName)
 }

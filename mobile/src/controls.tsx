@@ -1,19 +1,44 @@
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
+import { findAddresses } from '../../src/address-search'
+import { formatNumberDigits } from '../../src/localized-number'
 import type { Place } from './model'
 
-export function Button({ title, onPress, disabled, secondary }: {
-  title: string; onPress: () => void; disabled?: boolean; secondary?: boolean
+export function Button({ title, onPress, disabled, secondary, accessibilityLabel }: {
+  title: string; onPress: () => void; disabled?: boolean; secondary?: boolean; accessibilityLabel?: string
 }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled}
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ disabled }} disabled={disabled}
     onPress={onPress} style={({ pressed }) => [ui.button, secondary && ui.secondary, (pressed || disabled) && ui.dim]}>
     <Text style={[ui.buttonText, secondary && ui.secondaryText]}>{title}</Text>
   </Pressable>
 }
 
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
-  return <View style={ui.field}><Text style={ui.label}>{label}</Text>
-    <TextInput accessibilityLabel={label} placeholderTextColor="#667971" style={ui.input} {...props} /></View>
+export function Field({ label, trailing, ...props }: TextInputProps & { label: string; trailing?: ReactNode }) {
+  return <View style={ui.field}>
+    <Text style={ui.label}>{label}</Text>
+    <View>
+      <TextInput accessibilityLabel={label} placeholderTextColor="#667971" style={[ui.input, !!trailing && ui.inputTrailing]} {...props} />
+      {!!trailing && <View style={ui.trailing}>{trailing}</View>}
+    </View>
+  </View>
+}
+
+export function NumberField({ label, mode = 'integer', value, onChange, hint }: {
+  label: string; mode?: 'integer' | 'money' | 'decimal'; value: string
+  onChange: (value: string) => void; hint?: string
+}) {
+  const fractional = mode !== 'integer'
+  return <View style={ui.field}>
+    <Text style={ui.label}>{label}</Text>
+    {!!hint && <Text style={ui.muted}>{hint}</Text>}
+    <View style={ui.numberInput}>
+      {mode === 'money' && <Text style={ui.numberPrefix}>R$</Text>}
+      <TextInput accessibilityLabel={label} placeholder={fractional ? '0,00' : '0'} placeholderTextColor="#667971"
+        style={ui.numberValue} value={value} keyboardType="number-pad" maxLength={16}
+        onChangeText={input => onChange(value === '0,00' && input.length < value.length ? '' : formatNumberDigits(input, fractional))} />
+    </View>
+  </View>
 }
 
 export function Address({ label, value, onChange }: { label: string; value: Place | null; onChange: (value: Place | null) => void }) {
@@ -26,19 +51,23 @@ export function Address({ label, value, onChange }: { label: string; value: Plac
     if (value || text.trim().length < 3) return
     const controller = new AbortController()
     const timer = setTimeout(async () => {
+      const timeout = setTimeout(() => {
+        if (!controller.signal.aborted) {
+          setHint('Busca indisponível. Tente novamente.')
+          controller.abort()
+        }
+      }, 7000)
       try {
-        const result = await fetch('https://photon.komoot.io/api/?limit=6&lang=pt&q=' + encodeURIComponent(text.trim()), { signal: controller.signal })
-        if (!result.ok) throw new Error()
-        const { features } = await result.json() as { features: { geometry: { coordinates: [number, number] }; properties: Record<string, string> }[] }
+        const places = await findAddresses('api/', {
+          q: text.trim(), limit: '6', lat: '-7.132', lon: '-34.871', countrycode: 'BR',
+        }, controller.signal)
         if (controller.signal.aborted) return
-        const places = features.map(({ properties: p, geometry }) => ({
-          longitude: geometry.coordinates[0], latitude: geometry.coordinates[1],
-          label: [...new Set([p.name, p.street, p.district, p.city, p.state].filter(Boolean))].join(' · ').slice(0, 240),
-        })).filter(p => p.label)
         setMatches(places)
         if (!places.length) setHint('Nenhum endereço encontrado.')
       } catch {
         if (!controller.signal.aborted) setHint('Busca indisponível. Tente novamente.')
+      } finally {
+        clearTimeout(timeout)
       }
     }, 450)
     return () => { clearTimeout(timer); controller.abort() }
@@ -62,5 +91,10 @@ export const ui = StyleSheet.create({
   field: { gap: 5 },
   label: { color: '#142d24', fontWeight: '700' },
   input: { minHeight: 49, fontSize: 16, color: '#142d24', paddingHorizontal: 12, backgroundColor: '#f6faf8', borderColor: '#c6d9ce', borderWidth: 1, borderRadius: 11 },
+  inputTrailing: { paddingRight: 52 },
+  trailing: { position: 'absolute', top: 0, bottom: 0, right: 4, justifyContent: 'center' },
+  numberInput: { flexDirection: 'row', alignItems: 'center', minHeight: 49, paddingHorizontal: 12, backgroundColor: '#f6faf8', borderColor: '#c6d9ce', borderWidth: 1, borderRadius: 11 },
+  numberPrefix: { color: '#526a60', fontWeight: '700', marginRight: 8 },
+  numberValue: { flex: 1, minHeight: 46, fontSize: 16, color: '#142d24', padding: 0, fontVariant: ['tabular-nums'] },
   muted: { color: '#526a60', fontSize: 13 },
 })

@@ -1,3 +1,4 @@
+import { parseNumber } from '../../src/localized-number'
 import type { Point } from '../../src/arrival'
 
 export type { Point }
@@ -16,4 +17,4 @@ export type Dashboard = {
 }
 export type Closing = { revenue: number; profit: number | null; distance: number; startedAt: string; endedAt: string }
 export const money = (value: number | null) => value === null ? 'Pendente' : (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-export const numeric = (value: string) => /^\d+(?:[,.]\d+)?$/.test(value.trim()) ? Number(value.replace(',', '.')) : NaN
+export const numeric = parseNumber

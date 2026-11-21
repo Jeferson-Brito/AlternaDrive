@@ -1,30 +1,9 @@
 import { useEffect, useId, useState } from 'react'
 import { LocateFixed } from 'lucide-react'
 import type { Point } from './arrival'
+import { findAddresses, type AddressMatch } from './address-search'
 
 const photon = import.meta.env.VITE_GEOCODER_URL || 'https://photon.komoot.io/'
-type AddressMatch = Point & { label: string }
-type AddressProperties = Partial<Record<'name' | 'street' | 'housenumber' | 'district' | 'city' | 'state', string>>
-
-async function findAddresses(endpoint: string, params: Record<string, string>, signal: AbortSignal) {
-  const url = new URL(endpoint, photon.endsWith('/') ? photon : photon + '/')
-  url.search = new URLSearchParams(params).toString()
-  const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error('Serviço de endereços indisponível.')
-  const { features } = await response.json() as {
-    features: { properties: AddressProperties; geometry: { coordinates: [number, number] } }[]
-  }
-  const matches = new Map<string, AddressMatch>()
-  for (const { properties: place, geometry } of features) {
-    const [longitude, latitude] = geometry.coordinates
-    const street = [place.street, place.housenumber].filter(Boolean).join(', ')
-    const label = [...new Set([place.name === place.street ? undefined : place.name, street, place.district, place.city, place.state].filter(Boolean))]
-      .join(' · ').slice(0, 240)
-    if (label && !matches.has(label)) matches.set(label, { label, latitude, longitude })
-  }
-  return [...matches.values()]
-}
-
 export function AddressField({ name, title, initial, initialPoint }: {
   name: string; title: string; initial?: string | null; initialPoint?: Point | null;
 }) {
@@ -43,7 +22,7 @@ export function AddressField({ name, title, initial, initialPoint }: {
       try {
         const matches = await findAddresses('api/', {
           q: query, limit: '6', lat: '-7.132', lon: '-34.871',
-        }, signal)
+        }, signal, photon)
         if (!controller.signal.aborted) {
           setSuggestions(matches)
           setStatus(matches.length ? '' : 'Sem sugestões. Tente incluir o número e a cidade.')
@@ -112,7 +91,7 @@ export function JourneyOrigin({ saved }: { saved: string }) {
       try {
         const matches = await findAddresses('reverse', {
           lat: String(latitude), lon: String(longitude), limit: '1',
-        }, AbortSignal.timeout(5000))
+        }, AbortSignal.timeout(5000), photon)
         address = matches[0]?.label ?? fallback
       } catch {
         // The GPS fix is usable even if no street address is available.
