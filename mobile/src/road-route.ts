@@ -4,6 +4,7 @@ import { distanceMeters } from '../../src/arrival'
 import { navigationEstimate } from '../../src/journey-time'
 import { routeProgress, travelBearing, type RoadLine } from '../../src/route-geometry'
 import { api } from './api'
+import type { StopDemand } from './Passenger'
 import type { NearbyDriver } from './nearby-drivers'
 import type { Journey, Point } from './model'
 
@@ -72,6 +73,9 @@ export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & {
   following: boolean
   onExplore: () => void
   drivers: NearbyDriver[]
+  demand?: StopDemand[]
+  passengerCenter?: Point
+  waitingStop?: Omit<StopDemand, 'count'>
 }
 
 export const navigationPitch = 64

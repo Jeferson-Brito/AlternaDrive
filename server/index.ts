@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { combinedEfficiency } from './vehicle-efficiency'
 import { chartPeriods, dailyProfit, nextReportingDay, periods, summarize } from './finance'
 import { nearbyDrivers, removeDriver } from './driver-presence'
+import { closestServedStop, findStops, stopDemand, updateWaiting } from './passenger-presence'
 import { findAddresses } from '../src/address-search'
 import { distanceMeters, isArrival } from '../src/arrival'
 import { habitualRoute, routeCheckpoints } from '../src/route-geometry'
@@ -100,6 +101,41 @@ app.post('/api/logout', async (req, res) => {
   if (token) await prisma.session.deleteMany({ where: { id: token } })
   res.clearCookie('alternadrive_session', cookie).json({ ok: true })
 })
+const passengerLimit = rateLimit({ windowMs: 60_000, limit: 90, standardHeaders: 'draft-7', legacyHeaders: false })
+const passengerSession = z.string().uuid()
+const routePoint = z.array(point).length(7)
+app.post('/api/passenger/map', passengerLimit, async (req, res) => {
+  const { position, session } = z.object({ position: point, session: passengerSession.optional() }).parse(req.body)
+  const stops = await findStops(position)
+  const around = (value: number) => ({ gte: value - .18, lte: value + .18 })
+  const samples = stops.length ? await prisma.routeExperience.findMany({
+    where: { fromLat: around(position.latitude), fromLon: around(position.longitude) },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 500,
+  }) : []
+  const groups: { from: { latitude: number; longitude: number }; to: { latitude: number; longitude: number };
+    votes: { userId: string; checkpoints: z.infer<typeof routePoint> }[] }[] = []
+  for (const sample of samples.reverse()) {
+    const checkpoints = routePoint.safeParse(sample.checkpoints).data
+    if (!checkpoints) continue
+    const from = { latitude: sample.fromLat, longitude: sample.fromLon }
+    const to = { latitude: sample.toLat, longitude: sample.toLon }
+    const group = groups.find(group => distanceMeters(group.from, from) <= 250 && distanceMeters(group.to, to) <= 250)
+    const vote = { userId: sample.userId, checkpoints }
+    if (group) group.votes.push(vote)
+    else groups.push({ from, to, votes: [vote] })
+  }
+  const routes = groups.flatMap(({ from, to, votes }) => {
+    const checkpoints = habitualRoute(votes)
+    return checkpoints ? [[from, ...checkpoints, to].map(({ latitude, longitude }) => [longitude, latitude] as [number, number])] : []
+  })
+  const stop = closestServedStop(position, stops, routes)
+  res.json({ stop, session: updateWaiting(session, stop), drivers: nearbyDrivers(null, position, undefined, Date.now(), undefined, stop ?? undefined) })
+})
+app.post('/api/passenger/hide', passengerLimit, (req, res) => {
+  const { session } = z.object({ session: passengerSession }).parse(req.body)
+  updateWaiting(session, null)
+  res.json({ ok: true })
+})
 app.use('/api', async (req, res, next) => {
   const token = sessionId(req)
   const session = token && await prisma.session.findFirst({
@@ -133,13 +169,21 @@ app.get('/api/addresses', rateLimit({
 app.post('/api/drivers/nearby', rateLimit({
   windowMs: 60_000, limit: 90, standardHeaders: 'draft-7', legacyHeaders: false,
 }), async (req, res) => {
-  const { center, journeyId } = z.object({ center: point, journeyId: id.optional() }).parse(req.body)
+  const coordinates = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
+  const routeSchema = z.object({ coordinates: z.array(coordinates).min(2).max(400),
+    duration: z.number().positive().max(86_400), departure: point })
+  const { center, journeyId, route } = z.object({ center: point, journeyId: id.optional(), route: routeSchema.optional() }).parse(req.body)
   const userId = res.locals.user.id as string
   const vehicle = journeyId && await prisma.journey.findFirst({
     where: { id: journeyId, activeUserId: userId },
     select: { vehicle: { select: { type: true } } },
   })
-  res.json(nearbyDrivers(userId, center, vehicle ? vehicle.vehicle.type : undefined))
+  const validRoute = route && distanceMeters(center, route.departure) <= 100 ? route : undefined
+  res.json(nearbyDrivers(userId, center, vehicle ? vehicle.vehicle.type : undefined, Date.now(), validRoute))
+})
+app.post('/api/passenger/demand', passengerLimit, (req, res) => {
+  const center = point.parse(req.body)
+  res.json(stopDemand(center))
 })
 app.post('/api/drivers/hide', (_req, res) => {
   removeDriver(res.locals.user.id)

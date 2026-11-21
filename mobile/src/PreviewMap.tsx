@@ -4,6 +4,7 @@ import MapView, { Marker, Polyline, type MapStyleElement } from 'react-native-ma
 import { navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
 import { useRouteHighlight } from './route-trail'
+import { StopMarker } from './StopMarker'
 import { DriverMarker } from './DriverMarker'
 
 const initialRegion = { latitude: -7.132, longitude: -34.871, latitudeDelta: .033, longitudeDelta: .030 }
@@ -38,7 +39,7 @@ function PreviewRouteHighlight({ road }: { road: RoadLine }) {
     strokeColor={band.color} strokeWidth={band.width} lineCap="round" lineJoin="round" zIndex={3 + index} />)}</>
 }
 
-export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
+export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, waitingStop, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
   const [ready, setReady] = useState(false)
@@ -50,8 +51,9 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
     if (center) map.current?.animateCamera({
       center, zoom: navigationZoom, pitch: navigationPitch, heading: heading ?? 0,
     }, { duration: 550 })
+    else if (passengerCenter) map.current?.animateCamera({ center: passengerCenter, zoom: 15 }, { duration: 450 })
     else if (a && b) map.current?.fitToCoordinates([a, b], { edgePadding: { top: 120, right: 48, bottom: 190, left: 48 } })
-  }, [ready, routeKey, center, heading, height, following])
+  }, [ready, routeKey, center, heading, height, following, passengerCenter])
 
   return <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={initialRegion} customMapStyle={previewPalette}
     userInterfaceStyle="light" onMapReady={() => setReady(true)}
@@ -67,8 +69,13 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
     {!active && !decorative && road && <PreviewRouteHighlight road={road.geometry} />}
     {a && <Marker coordinate={a} title="Ponto A"><Text style={styles.pin}>A</Text></Marker>}
     {b && <Marker coordinate={b} title="Ponto B"><Text style={styles.pin}>B</Text></Marker>}
+    {demand.map(stop => <Marker key={'stop-' + stop.id} coordinate={stop} title={stop.name}>
+      <StopMarker count={stop.count} />
+    </Marker>)}
+    {waitingStop && <Marker coordinate={waitingStop} title={waitingStop.name}><StopMarker count={1} /></Marker>}
     {drivers.map(driver => <Marker key={driver.id} coordinate={driver} title="Motorista próximo" anchor={{ x: .5, y: .5 }}>
       <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} />
+        {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
     </Marker>)}
     {active && current && <Marker coordinate={current} title="Seu veículo" anchor={{ x: .5, y: .5 }}>
       <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} />
@@ -77,5 +84,6 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
 }
 
 const styles = StyleSheet.create({
+  arrival: { fontSize: 11, fontWeight: '800', color: '#0b5a48', backgroundColor: '#fff', padding: 3, borderRadius: 4 },
   pin: { backgroundColor: '#0b5a48', color: 'white', textAlign: 'center', width: 26, height: 26, lineHeight: 26, borderRadius: 13, overflow: 'hidden', fontWeight: '800' },
 })
