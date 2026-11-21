@@ -21,7 +21,7 @@ import { workDuration } from '../src/journey-time'
 
 type Panel = 'closing' | 'report' | 'menu' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
-  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operaÃ§Ã£o', route: 'Percurso e tarifa', vehicle: 'Cadastrar veÃ­culo', start: 'Iniciar jornada',
+  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
   group: 'Registrar grupo', finish: 'Finalizar jornada', fuel: 'Abastecimento', expense: 'Registrar despesa',
 }
 
@@ -133,18 +133,18 @@ function Operation() {
         recordForegroundLocation(location)
       })
       if (cancelled) watcher.remove()
-    }).catch(() => { if (!cancelled) setGpsStatus('GPS indisponÃ­vel.') })
+    }).catch(() => { if (!cancelled) setGpsStatus('GPS indisponível.') })
     return () => { cancelled = true; watcher?.remove() }
   }, [activeId, gpsStatus])
 
   async function enableTracking(journey: NonNullable<Dashboard['active']>) {
     try {
       const tracking = await startTracking(journey)
-      setGpsStatus(tracking === 'denied' ? 'Permita o acesso Ã  localizaÃ§Ã£o para acompanhar a jornada.'
+      setGpsStatus(tracking === 'denied' ? 'Permita o acesso à localização para acompanhar a jornada.'
         : tracking === 'background' ? 'GPS em segundo plano ativo'
-        : isExpoGo ? 'GPS ativo com o app aberto' : 'Permita a localizaÃ§Ã£o em segundo plano para acompanhar com a tela bloqueada.')
+        : isExpoGo ? 'GPS ativo com o app aberto' : 'Permita a localização em segundo plano para acompanhar com a tela bloqueada.')
     } catch {
-      setGpsStatus('GPS em segundo plano indisponÃ­vel. VocÃª pode tentar ativÃ¡-lo novamente.')
+      setGpsStatus('GPS em segundo plano indisponível. Você pode tentar ativá-lo novamente.')
     }
   }
 
@@ -174,9 +174,9 @@ function Operation() {
     if (!token) return
     let currentLocation
     if (useCurrent) {
-      if (!(await Location.requestForegroundPermissionsAsync()).granted) throw new Error('Autorize o GPS para usar a localizaÃ§Ã£o atual.')
+      if (!(await Location.requestForegroundPermissionsAsync()).granted) throw new Error('Autorize o GPS para usar a localização atual.')
       const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
-      currentLocation = { latitude: coords.latitude, longitude: coords.longitude, address: 'LocalizaÃ§Ã£o atual' }
+      currentLocation = { latitude: coords.latitude, longitude: coords.longitude, address: 'Localização atual' }
     }
     await api('journeys', { vehicleId, startKm: numeric(first), currentLocation }, token)
     show(null)
@@ -206,7 +206,7 @@ function Operation() {
         <ScrollView contentContainerStyle={styles.loginBody} keyboardShouldPersistTaps="handled">
           <View style={styles.loginCard}>
             <Brand />
-            <Text style={styles.title}>{!ready ? 'Carregandoâ€¦' : token ? 'Conectando Ã  sua conta' : register ? 'Criar conta' : 'Entre na sua conta'}</Text>
+            <Text style={styles.title}>{!ready ? 'Carregando…' : token ? 'Conectando à sua conta' : register ? 'Criar conta' : 'Entre na sua conta'}</Text>
             {secureError}
             {ready && !token && <Button secondary title="Sou passageiro" onPress={() => setPassenger(true)} />}
             {ready && (token ? <Button title="Tentar novamente" disabled={busy} onPress={() => void run(async () => { await reload(token) })} /> : <>
@@ -221,7 +221,7 @@ function Operation() {
                 setToken(session)
                 await reload(session)
               })} />
-              <Button secondary title={register ? 'JÃ¡ tenho conta' : 'Criar conta'} onPress={() => { setRegister(!register); setError('') }} />
+              <Button secondary title={register ? 'Já tenho conta' : 'Criar conta'} onPress={() => { setRegister(!register); setError('') }} />
             </>)}
           </View>
         </ScrollView>
@@ -231,12 +231,12 @@ function Operation() {
 
   const stats = data.summaries.find(item => item.period === 'day')
   const destination = active ? (active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
-  const dayRevenue = hide ? 'â€¢â€¢â€¢â€¢' : money(stats?.revenue ?? 0)
+  const dayRevenue = hide ? '••••' : money(stats?.revenue ?? 0)
   const dayBoardings = stats?.passengers ?? 0
   const vehicles = data.vehicles.map(vehicle => <Button key={vehicle.id} secondary={vehicle.id !== vehicleId}
     title={vehicle.name} onPress={() => setVehicleId(vehicle.id)} />)
   const submit = (title: string, action: () => Promise<void>, invalid = false) =>
-    <Button title={busy ? 'Aguardeâ€¦' : title} disabled={busy || invalid} onPress={() => void run(action)} />
+    <Button title={busy ? 'Aguarde…' : title} disabled={busy || invalid} onPress={() => void run(action)} />
   const cents = (input: string) => Math.round(numeric(input) * 100)
   const minPrice = (input: string) => numeric(input) > 0
   const odometerValue = numeric(first)
@@ -249,11 +249,11 @@ function Operation() {
       {active ? <View style={styles.stats}>
         <Metric label="Embarques" value={dayBoardings} dark />
         <Metric label="Receita" value={dayRevenue} dark />
-        <Metric label="Lucro est." value={hide ? 'â€¢â€¢â€¢â€¢' : money(stats?.profit ?? null)} dark />
+        <Metric label="Lucro est." value={hide ? '••••' : money(stats?.profit ?? null)} dark />
         <IconButton dark icon={hide ? 'eyeOff' : 'eye'} label={hide ? 'Exibir valores' : 'Ocultar valores'} onPress={toggleFinancePrivacy} />
       </View> : <View style={styles.homeTop} pointerEvents="box-none">
         <View style={styles.floatingMenu}>
-          <IconButton icon="menu" label="Menu da operaÃ§Ã£o" onPress={() => show('menu')} />
+          <IconButton icon="menu" label="Menu da operação" onPress={() => show('menu')} />
         </View>
         <View style={styles.dayBubble}>
           <View style={styles.dayMetric}>
@@ -268,16 +268,16 @@ function Operation() {
         </View>
       </View>}
       {active && !following ? <View style={styles.recenter}>
-        <Button title="Recentralizar veÃ­culo" onPress={() => setFollowing(true)} />
+        <Button title="Recentralizar veículo" onPress={() => setFollowing(true)} />
       </View> : <View style={active ? styles.card : styles.homeAction}>
         {!!error && !panel && secureError}
         {active ? <>
-          <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Recolher aÃ§Ãµes' : 'Expandir aÃ§Ãµes'}
+          <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Recolher ações' : 'Expandir ações'}
             accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.drawer}>
             <View style={styles.grip} />
             <View style={styles.destinationRow}>
               <View style={styles.destination}>
-                <Text style={styles.label}>{'PrÃ³ximo destino Â· Ponto ' + (active.arrivals % 2 ? 'A' : 'B')}</Text>
+                <Text style={styles.label}>{'Próximo destino · Ponto ' + (active.arrivals % 2 ? 'A' : 'B')}</Text>
                 <Text numberOfLines={1} style={ui.muted}>{destination}</Text>
               </View>
               <Icon name={expanded ? 'down' : 'up'} />
@@ -285,7 +285,7 @@ function Operation() {
           </Pressable>
           {route.estimate && <View style={styles.estimate}>
             <Text style={styles.estimateText}>{Math.ceil(route.estimate.seconds / 60)} min</Text>
-            <Text style={styles.estimateText}>Ã s {new Date(Date.now() + route.estimate.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
+            <Text style={styles.estimateText}>às {new Date(Date.now() + route.estimate.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
             <Text style={styles.estimateText}>{(route.estimate.meters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km</Text>
           </View>}
           <Pressable accessibilityRole="button" disabled={busy} accessibilityLabel={'Registrar passageiro por ' + money(active.fare)}
@@ -303,12 +303,12 @@ function Operation() {
             <View style={styles.sharing}>
               <View style={styles.sharingCopy}>
                 <Text style={styles.label}>Aparecer no mapa do AlternaDrive</Text>
-                <Text style={ui.muted}>Compartilha a posiÃ§Ã£o aproximada enquanto o app estÃ¡ aberto nesta jornada.</Text>
+                <Text style={ui.muted}>Compartilha a posição aproximada enquanto o app está aberto nesta jornada.</Text>
               </View>
               <Switch accessibilityLabel="Aparecer no mapa do AlternaDrive" value={hiddenJourneyId !== active.id}
                 onValueChange={enabled => setHiddenJourneyId(enabled ? undefined : active.id)} />
             </View>
-            <Text style={ui.muted}>Tempo trabalhado Â· {workDuration(active.startedAt, Date.now())}</Text>
+            <Text style={ui.muted}>Tempo trabalhado · {workDuration(active.startedAt, Date.now())}</Text>
             <View style={styles.actionRow}>
               {active.vehicle.type !== 'motorcycle' && <Shortcut icon="users" text="Grupo" onPress={() => show('group')} />}
               <Shortcut icon="fuel" text="Abastecer" onPress={() => show('fuel')} />
@@ -322,7 +322,7 @@ function Operation() {
           <Pressable accessibilityRole="button" style={({ pressed }) => [ui.button, styles.homeStart, pressed && ui.dim]}
             onPress={() => show(!data.vehicles.length ? 'vehicle' : !data.defaults.defaultPointA ? 'route' : 'start')}>
             <Icon name="route" color="#fff" size={22} />
-            <Text style={ui.buttonText}>{data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veÃ­culo'}</Text>
+            <Text style={ui.buttonText}>{data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veículo'}</Text>
           </Pressable>
         </>}
       </View>}
@@ -337,19 +337,19 @@ function Operation() {
               {secureError}
               {panel === 'closing' && journeyClosing && <>
                 <View style={styles.closingHero}>
-                  <Text style={styles.closingLabel}>Lucro lÃ­quido estimado</Text>
-                  <Text style={styles.closingValue}>{hide ? 'â€¢â€¢â€¢â€¢' : money(journeyClosing.profit)}</Text>
+                  <Text style={styles.closingLabel}>Lucro líquido estimado</Text>
+                  <Text style={styles.closingValue}>{hide ? '••••' : money(journeyClosing.profit)}</Text>
                 </View>
                 <View style={styles.closingMetrics}>
                   <Metric label="Tempo trabalhado" value={workDuration(journeyClosing.startedAt, journeyClosing.endedAt)} />
-                  <Metric label="DistÃ¢ncia" value={journeyClosing.distance.toLocaleString('pt-BR') + ' km'} />
+                  <Metric label="Distância" value={journeyClosing.distance.toLocaleString('pt-BR') + ' km'} />
                   <Metric label="Embarques" value={journeyClosing.passengers} />
                 </View>
                 <View style={styles.closingDetails}>
-                  {[['Receita bruta', journeyClosing.revenue], ['CombustÃ­vel estimado', journeyClosing.fuel], ['Outras despesas', journeyClosing.otherExpenses]].map(([label, value]) =>
+                  {[['Receita bruta', journeyClosing.revenue], ['Combustível estimado', journeyClosing.fuel], ['Outras despesas', journeyClosing.otherExpenses]].map(([label, value]) =>
                     <View key={String(label)} style={styles.closingRow}>
                       <Text style={ui.label}>{label}</Text>
-                      <Text style={styles.label}>{hide ? 'â€¢â€¢â€¢â€¢' : money(value as number | null)}</Text>
+                      <Text style={styles.label}>{hide ? '••••' : money(value as number | null)}</Text>
                     </View>)}
                 </View>
                 <Button title="Voltar ao mapa" onPress={() => show(null)} />
@@ -358,7 +358,7 @@ function Operation() {
               {panel === 'menu' && <>
                 <Button secondary title="Lucro por dia" onPress={() => show('report')} />
                 <Button secondary title="Percurso e tarifa" onPress={() => show('route')} />
-                <Button secondary title="Cadastrar veÃ­culo" onPress={() => show('vehicle')} />
+                <Button secondary title="Cadastrar veículo" onPress={() => show('vehicle')} />
                 {!!data.vehicles.length && <Button secondary title="Abastecimento" onPress={() => show('fuel')} />}
                 <Button secondary title="Registrar despesa" onPress={() => show('expense')} />
                 {submit('Sair', async () => {
@@ -377,32 +377,32 @@ function Operation() {
                   defaultPointA: pointA, defaultPointB: pointB, defaultFare: cents(first),
                 }))} />}
               {panel === 'vehicle' && <VehicleForm busy={busy} save={vehicle => void run(() => save('vehicles', vehicle))} />}
-              {(panel === 'start' || panel === 'fuel') && <><Text style={styles.label}>VeÃ­culo</Text>{vehicles}</>}
+              {(panel === 'start' || panel === 'fuel') && <><Text style={styles.label}>Veículo</Text>{vehicles}</>}
               {panel === 'start' && <>
                 <View style={styles.routePreview}>
-                  <Text style={ui.muted}>Ponto A Â· Origem</Text>
+                  <Text style={ui.muted}>Ponto A · Origem</Text>
                   <Text style={styles.label}>{data.defaults.defaultOrigin}</Text>
-                  <Text style={ui.muted}>Ponto B Â· Destino</Text>
+                  <Text style={ui.muted}>Ponto B · Destino</Text>
                   <Text style={styles.label}>{data.defaults.defaultDestination}</Text>
-                  <Text style={ui.muted}>Tarifa por passageiro Â· {money(data.defaults.defaultFare)}</Text>
+                  <Text style={ui.muted}>Tarifa por passageiro · {money(data.defaults.defaultFare)}</Text>
                 </View>
-                <NumberField mode="odometer" label="HodÃ´metro inicial (km)" value={first} onChange={setFirst} />
+                <NumberField mode="odometer" label="Hodômetro inicial (km)" value={first} onChange={setFirst} />
                 <Text style={ui.muted}>Informe a quilometragem total exibida no painel.</Text>
-                <Button secondary={!useCurrent} title={useCurrent ? 'âœ“ Usar localizaÃ§Ã£o atual' : 'Usar localizaÃ§Ã£o atual'} onPress={() => setUseCurrent(!useCurrent)} />
+                <Button secondary={!useCurrent} title={useCurrent ? '✓ Usar localização atual' : 'Usar localização atual'} onPress={() => setUseCurrent(!useCurrent)} />
                 <Text style={ui.muted}>Durante a jornada, sua posição aproximada aparece no mapa. Você pode ocultá-la nos controles da jornada.</Text>
                 {submit('Iniciar jornada', begin, !vehicleId || !validOdometer)}
               </>}
               {panel === 'group' && <>
-                <NumberField label="NÃºmero de passageiros" value={first} onChange={setFirst} />
+                <NumberField label="Número de passageiros" value={first} onChange={setFirst} />
                 {submit('Registrar grupo', () => save('journeys/' + active?.id + '/boardings', { count: numeric(first) }), !Number.isInteger(numeric(first)) || !minPrice(first))}
               </>}
               {panel === 'finish' && <>
-                <NumberField mode="odometer" label="HodÃ´metro final (km)" value={first} onChange={setFirst} />
+                <NumberField mode="odometer" label="Hodômetro final (km)" value={first} onChange={setFirst} />
                 {submit('Confirmar encerramento', finish, !validOdometer || odometerValue < (active?.startKm ?? 0))}
               </>}
               {panel === 'fuel' && <>
                 <NumberField mode="money" label="Total pago (R$)" value={first} onChange={setFirst} />
-                <NumberField mode="money" label="PreÃ§o por litro ou mÂ³ (R$)" value={second} onChange={setSecond} />
+                <NumberField mode="money" label="Preço por litro ou m³ (R$)" value={second} onChange={setSecond} />
                 {submit('Salvar abastecimento', () => save('entries', { kind: 'fuel', vehicleId, amount: cents(first), fuelUnitPrice: cents(second) }),
                   !vehicleId || !minPrice(first) || !minPrice(second))}
               </>}

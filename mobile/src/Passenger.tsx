@@ -39,7 +39,7 @@ export function usePassengerDemand(token: string | null, location: Point | null)
 }
 
 export function Passenger({ close }: { close: () => void }) {
-  const [status, setStatus] = useState('Buscando sua localizaÃ§Ã£oâ€¦')
+  const [status, setStatus] = useState('Buscando sua localização…')
   const [data, setData] = useState<PassengerMap>()
   const [center, setCenter] = useState<Point>()
   const route = useRoadRoute({ a: null, b: null, active: null, position: null, token: '' })
@@ -57,7 +57,7 @@ export function Passenger({ close }: { close: () => void }) {
       if (Date.now() - fix.timestamp > 30_000 || (accuracy ?? Infinity) > 50) {
         if (session) { hide(session); session = undefined }
         setData(undefined)
-        setStatus('Aguardando uma localizaÃ§Ã£o mais precisaâ€¦')
+        setStatus('Aguardando uma localização mais precisa…')
         return
       }
       pending = true
@@ -68,13 +68,13 @@ export function Passenger({ close }: { close: () => void }) {
         if (disposed || requestEpoch !== epoch) { hide(result.session); return }
         session = result.session
         setData(result)
-        setStatus(result.stop ? 'Sua presenÃ§a estÃ¡ visÃ­vel nesta parada.' : 'Nenhuma parada atendida em atÃ© 150 m.')
-      } catch { if (!disposed && requestEpoch === epoch) { setData(undefined); setStatus('Mapa de passageiros indisponÃ­vel. Tentando novamenteâ€¦') } }
+        setStatus(result.stop ? 'Sua presença está visível nesta parada.' : 'Nenhuma parada atendida em até 150 m.')
+      } catch { if (!disposed && requestEpoch === epoch) { setData(undefined); setStatus('Mapa de passageiros indisponível. Tentando novamente…') } }
       finally { pending = false }
     }
     void Location.requestForegroundPermissionsAsync().then(async permission => {
       if (disposed) return
-      if (!permission.granted) { setStatus('Permita a localizaÃ§Ã£o para detectar as paradas prÃ³ximas.'); return }
+      if (!permission.granted) { setStatus('Permita a localização para detectar as paradas próximas.'); return }
       watcher = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 3000 }, location => {
         if (disposed) return
         fix = location
@@ -82,7 +82,7 @@ export function Passenger({ close }: { close: () => void }) {
         void refresh()
       })
       if (disposed) watcher.remove()
-    }).catch(() => { if (!disposed) setStatus('LocalizaÃ§Ã£o indisponÃ­vel.') })
+    }).catch(() => { if (!disposed) setStatus('Localização indisponível.') })
     const timer = setInterval(refresh, 3000)
     const listener = AppState.addEventListener('change', state => {
       if (state === 'active') { void refresh(); return }
@@ -112,7 +112,7 @@ export function Passenger({ close }: { close: () => void }) {
         {data?.stop && <Text style={styles.title}>{data.stop.name}</Text>}
         <Text style={styles.body}>{status}</Text>
         <Text style={styles.body}>Motoristas veem a parada e o número de pessoas esperando.</Text>
-        {data && <Text style={styles.body}>Motoristas em jornada na regiÃ£o: {data.drivers.length}</Text>}
+        {data && <Text style={styles.body}>Motoristas em jornada na região: {data.drivers.length}</Text>}
         {data?.stop && <Text style={styles.body}>{next.length
           ? 'Chegadas nesta parada · ' + next.slice(0, 3).map(driver => Math.max(1, Math.ceil(driver.arrivalSeconds! / 60)) + ' min').join(' · ')
           : 'Nenhum veículo com chegada prevista nesta parada.'}</Text>}
