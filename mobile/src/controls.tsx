@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
 import { api } from './api'
+import { includeTypedStreetNumber, type AddressOption } from './address-options'
 import { formatNumberDigits } from '../../src/localized-number'
 import type { Place } from './model'
 
@@ -43,7 +44,8 @@ export function NumberField({ label, mode = 'integer', value, onChange, hint }: 
 
 export function Address({ label, placeholder, value, onChange, token }: { label: string; placeholder?: string; value: Place | null; onChange: (value: Place | null) => void; token: string }) {
   const [text, setText] = useState(value?.label ?? '')
-  const [matches, setMatches] = useState<Place[]>([])
+  const [matches, setMatches] = useState<AddressOption[]>([])
+  const [approximate, setApproximate] = useState(false)
   const [hint, setHint] = useState('')
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)
@@ -65,7 +67,7 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
       try {
         const places = await api<Place[]>('addresses?q=' + encodeURIComponent(text.trim()), undefined, token, controller.signal)
         if (controller.signal.aborted) return
-        setMatches(places)
+        setMatches(places.map(place => includeTypedStreetNumber(text, place)))
         setHint(places.length ? '' : 'Sem sugestões. Tente incluir o bairro ou a cidade.')
       } catch {
         if (!controller.signal.aborted) {
@@ -80,19 +82,20 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
   }, [text, value, retry, token])
 
   return <View style={ui.field}>
-    <Field label={label} placeholder={placeholder} value={text} maxLength={240} autoCorrect={false} onChangeText={input => { setText(input); onChange(null) }} />
+    <Field label={label} placeholder={placeholder} value={text} maxLength={240} autoCorrect={false} onChangeText={input => { setText(input); setApproximate(false); onChange(null) }} />
     {!!hint && <Text style={ui.muted}>{hint}</Text>}
     {failed && <Button title="Tentar busca novamente" secondary onPress={() => setRetry(value => value + 1)} />}
-    {value && <Text style={ui.confirmed}>✓ Endereço confirmado</Text>}
+    {value && <Text style={approximate ? ui.approximate : ui.confirmed}>{approximate ? 'Número informado · localização aproximada na rua' : '✓ Endereço selecionado'}</Text>}
     {matches.length > 0 && <View style={ui.addressOptions}>
       {matches.map(place => {
         const [name, ...details] = place.label.split(' · ')
         return <Pressable key={place.label + place.latitude + place.longitude}
-          accessibilityRole="button" accessibilityLabel={place.label}
+          accessibilityRole="button" accessibilityLabel={place.approximate ? place.label + '. Localização aproximada na rua.' : place.label}
           style={({ pressed }) => [ui.addressOption, pressed && ui.secondary]}
-          onPress={() => { setText(place.label); onChange(place) }}>
+          onPress={() => { setText(place.label); setApproximate(Boolean(place.approximate)); onChange(place) }}>
           <Text style={ui.label}>{name}</Text>
           {details.length > 0 && <Text style={ui.muted}>{details.join(' · ')}</Text>}
+          {place.approximate && <Text style={ui.approximate}>Localização aproximada na rua</Text>}
         </Pressable>
       })}
     </View>}
@@ -113,6 +116,7 @@ export const ui = StyleSheet.create({
   numberInput: { flexDirection: 'row', alignItems: 'center', minHeight: 49, paddingHorizontal: 12, backgroundColor: '#f6faf8', borderColor: '#c6d9ce', borderWidth: 1, borderRadius: 11 },
   numberPrefix: { color: '#526a60', fontWeight: '700', marginRight: 8 },
   numberValue: { flex: 1, minHeight: 46, fontSize: 16, color: '#142d24', padding: 0, fontVariant: ['tabular-nums'] },
+  approximate: { color: '#785320', fontWeight: '600', fontSize: 12 },
   confirmed: { color: '#0b5a48', fontWeight: '700', fontSize: 12 },
   addressOptions: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d8e7df', borderRadius: 11, overflow: 'hidden' },
   addressOption: { gap: 2, paddingHorizontal: 10, paddingVertical: 9, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e0ebe5' },
