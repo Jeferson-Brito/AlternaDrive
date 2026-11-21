@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "AlternaDrive",
+    "slug": "alternadrive",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.alternadrive.app"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
+    ],
+    "icon": "./assets/alternadrive.png"
+  }
+}

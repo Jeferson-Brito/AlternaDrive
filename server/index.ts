@@ -50,13 +50,22 @@ app.get('/api/health', async (_req, res) => {
 })
 
 type PublicUser = { id: string; email: string; name: string }
-async function login(res: express.Response, user: PublicUser) {
+async function login(req: express.Request, res: express.Response, user: PublicUser) {
   const token = randomBytes(32).toString('hex')
   await prisma.session.create({ data: { id: hash(token), userId: user.id, expiresAt: new Date(Date.now() + lifetime) } })
+  if (req.get('X-AlternaDrive-Client') === 'android') {
+    res.json({ user, token })
+    return
+  }
   res.cookie('alternadrive_session', token, { ...cookie, maxAge: lifetime })
   res.json(user)
 }
 function sessionId(req: express.Request) {
+  const authorization = req.get('Authorization')
+  if (authorization) {
+    const bearer = authorization.match(/^Bearer ([a-f0-9]{64})$/i)?.[1]
+    return bearer ? hash(bearer) : undefined
+  }
   const token = req.headers.cookie?.match(/(?:^|;\s*)alternadrive_session=([a-f0-9]{64})(?:;|$)/)?.[1]
   return token ? hash(token) : undefined
 }
@@ -71,7 +80,7 @@ app.post('/api/register', authLimit, async (req, res) => {
   const user = await prisma.user.create({
     data: { ...data, password: salt + ':' + key.toString('hex') }, select: userFields,
   })
-  await login(res, user)
+  await login(req, res, user)
 })
 app.post('/api/login', authLimit, async (req, res) => {
   const data = z.object({ email, password: secret }).parse(req.body)
@@ -82,7 +91,7 @@ app.post('/api/login', authLimit, async (req, res) => {
     res.status(401).json({ error: 'E-mail ou senha incorretos.' })
     return
   }
-  await login(res, { id: user.id, name: user.name, email: user.email })
+  await login(req, res, { id: user.id, name: user.name, email: user.email })
 })
 app.post('/api/logout', async (req, res) => {
   const token = sessionId(req)
@@ -442,8 +451,10 @@ app.post('/api/goals', async (req, res) => {
   }))
 })
 app.use('/api', (_req, res) => { res.status(404).json({ error: 'Recurso indisponível.' }) })
-app.use(express.static(resolve('dist')))
-app.get('/', (_req, res) => res.sendFile(resolve('dist/index.html')))
+if (!production) {
+  app.use(express.static(resolve('dist')))
+  app.get('/', (_req, res) => res.sendFile(resolve('dist/index.html')))
+}
 const errors: ErrorRequestHandler = (error, _req, res, _next) => {
   if (error instanceof z.ZodError || error.status === 400 || error.status === 413) {
     res.status(error.status === 413 ? 413 : 422).json({ error: 'Confira os campos e tente novamente.' })

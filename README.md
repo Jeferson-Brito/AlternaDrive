@@ -58,3 +58,41 @@ Este repositório inicia com SQLite local. A migração e a publicação são et
 - A identificação por modelo e ano, a partir de 2000, usa a [base aberta fipeX de novembro de 2026](https://github.com/fipex-labs/dataset/releases/tag/v2026.11.0).
 - As referências de consumo vêm das [tabelas do PBE Veicular do Inmetro](https://www.gov.br/inmetro/pt-br/assuntos/regulamentacao/avaliacao-da-conformidade/programa-brasileiro-de-etiquetagem/tabelas-de-eficiencia-energetica/veiculos-automotivos-pbe-veicular) de 2022 a 2026. O ano do PBE identifica o ciclo da tabela. Confira se a versão e a motorização correspondem ao veículo.
 - A capacidade vem das fichas das montadoras para as versões confirmadas de [Polo](https://www.vw.com.br/idhub/content/dam/onehub_pkw/importers/br/literatura-de-bordo/manual-novo-polo/my25/Polo_BR_25C.5B1.POL_66_LOW.pdf), [Onix e Onix Plus](https://meu.chevrolet.com.br/content/dam/gmownercenter/gmsa/gmbr/dynamic/manuals/2025/chevrolet/Onix/pt/om_ng-chevrolet_Onix_my25-pt_BR.pdf), [Mobi](https://servicos.fiat.com.br/content/dam/fiat/products/handbooks/341/2022/handbook-mobi-2022_2022.pdf) e [CG 160](https://prodsalaimp.honda.com.br/releases/honda-cg-160-2025-nova-geracao-da-motocicleta-preferida-dos-brasileiros-traz-importantes).
+
+## App Android e API no Render
+
+O projeto Android fica em `mobile/`. Usa React Native com MapLibre Native para o mapa.
+O ambiente local ainda permite testar a API com SQLite. Em produção, a API usa exclusivamente
+PostgreSQL e não serve a interface web.
+
+### Banco e servidor
+
+1. No Supabase, crie o projeto. Em **Connect**, copie a conexão **Session pooler** (porta 5432).
+2. No Render, crie um **Blueprint** com este repositório e selecione a branch que contém `render.yaml`.
+   Quando pedir `DATABASE_URL`, informe a conexão do Supabase com a senha de banco substituída e
+   os parâmetros `sslmode=require&schema=alternadrive&connection_limit=5`. Use `?` antes do primeiro
+   parâmetro ou `&` se já houver parâmetros. Se a senha tiver caracteres especiais, codifique-os para URL.
+3. Abra `https://<servico>.onrender.com/api/health` e verifique que retorna `{"ok":true}`.
+
+A primeira inicialização aplica a migração PostgreSQL no schema `alternadrive`. Mantenha esse
+schema fora dos schemas expostos na Data API do Supabase e a URL do banco apenas no Render.
+O banco começa vazio. Os registros do SQLite local só devem ser importados se houver necessidade
+de manter os dados antigos. O APK recebe apenas a URL pública do Render.
+
+### Rodar no Android
+
+No computador, configure um JDK 17, o Android SDK e o Gradle pelo Android Studio.
+Na pasta do repositório, use dois terminais:
+
+- Para testar a API local, rode `npm ci`, `npm run db:setup` e `npm run dev:mobile`.
+- Na pasta `mobile`, rode `npm ci` e `npm run android`. O emulador usa `http://10.0.2.2:3001`.
+  Para o aparelho via USB, execute `adb reverse tcp:3001 tcp:3001` e configure
+  `EXPO_PUBLIC_API_URL=http://127.0.0.1:3001` no `mobile/.env.local` antes de iniciar.
+- Para testar com o Render, configure `EXPO_PUBLIC_API_URL` com a URL HTTPS do serviço no
+  `mobile/.env.local`. Para um APK independente, rode `npx expo prebuild --platform android`,
+  abra `mobile/android` no Android Studio e use **Build > Generate Signed App Bundle or APK > APK**.
+  Guarde a chave de assinatura fora do repositório para poder atualizar o mesmo app.
+
+No aparelho, teste cadastro, login, origem e destino, início da jornada, registro de passageiros,
+chegada ao ponto seguinte e encerramento. Para validar o GPS com a tela bloqueada, habilite
+a localização em segundo plano e confira se o destino mudou após chegar ao ponto.

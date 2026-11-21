@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  password  String
+  defaultFare Int?
+  defaultOrigin String?
+  defaultDestination String?
+  defaultPointA Json?
+  defaultPointB Json?
+  routeExperiences RouteExperience[]
+  sessions  Session[]
+  vehicles  Vehicle[]
+  journeys  Journey[]
+  entries   Entry[]
+  goals     Goal[]
+}
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([userId])
+}
+model Vehicle {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  name         String
+  type        String    @default("car")
+  referenceFuelPrice Int?
+  fuel        String
+  tank        Float?
+  catalogId   String?
+  cityEfficiency Float?
+  highwayEfficiency Float?
+  urbanShare  Int @default(100)
+  efficiency  Float
+  capacity    Int
+  journeys    Journey[]
+  entries     Entry[]
+  @@index([userId])
+}
+model Journey {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  activeUserId   String?     @unique
+  vehicleId      String
+  vehicle        Vehicle     @relation(fields: [vehicleId], references: [id])
+  origin         String
+  destination    String
+  startKm        Float
+  startLatitude Float?
+  startLongitude Float?
+  pointA Json?
+  pointB Json?
+  arrivals Int @default(0)
+  turnKm         Float?
+  endKm          Float?
+  efficiency     Float
+  outboundFuelPrice Int
+  returnFuelPrice   Int?
+  fare           Int
+  startedAt      DateTime    @default(now())
+  turnedAt       DateTime?
+  endedAt        DateTime?
+  boardings      Boarding[]
+  completedLegs  CompletedLeg[]
+  @@index([userId, startedAt])
+}
+model Boarding {
+  id        String   @id @default(cuid())
+  journeyId String
+  journey   Journey  @relation(fields: [journeyId], references: [id])
+  leg       String
+  legIndex  Int?
+  count     Int
+  fare      Int
+  createdAt DateTime @default(now())
+  @@index([journeyId, createdAt])
+  @@index([journeyId, legIndex])
+}
+model Entry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+  kind      String
+  label     String
+  amount    Int
+  liters    Float?
+  fuelUnitPrice Int?
+  stationName String?
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+}
+model Goal {
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  period String
+  amount Int
+  @@id([userId, period])
+}
+
+
+
+model RouteExperience {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  journeyId   String
+  leg         Int
+  fromLat     Float
+  fromLon     Float
+  toLat       Float
+  toLon       Float
+  checkpoints Json
+  createdAt   DateTime @default(now())
+  @@unique([journeyId, leg])
+  @@index([fromLat, fromLon, toLat, toLon])
+}
+model StationPrice {
+  stationId String
+  fuel      String
+  name      String
+  latitude  Float
+  longitude Float
+  unitPrice Int
+  updatedAt DateTime @updatedAt
+  @@id([stationId, fuel])
+  @@index([updatedAt])
+}
+model CompletedLeg {
+  journeyId String
+  journey   Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  index Int
+  arrivedAt DateTime @default(now())
+  distanceKm Float?
+  review String
+  @@id([journeyId, index])
+}

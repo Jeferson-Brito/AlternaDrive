@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: alternadrive-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build:server
+    startCommand: npm run start:render
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.2
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_TIME_ZONE
+        value: America/Fortaleza

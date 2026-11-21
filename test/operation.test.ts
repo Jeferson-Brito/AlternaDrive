@@ -25,10 +25,10 @@ test('isolates accounts and computes the net result of a round trip', async () =
       await once(server, 'listening')
       const address = server.address()
       assert(address && typeof address === 'object')
-      async function call(path: string, body?: object, cookie?: string, status = 200) {
+      async function call(path: string, body?: object, cookie?: string, status = 200, headers?: Record<string, string>) {
         const response = await fetch('http://127.0.0.1:' + address.port + '/api/' + path, {
           method: body ? 'POST' : 'GET',
-          headers: { ...(body && { 'content-type': 'application/json' }), ...(cookie && { cookie }) },
+          headers: { ...(body && { 'content-type': 'application/json' }), ...(cookie && { cookie }), ...headers },
           body: body && JSON.stringify(body),
         })
         const result = await response.json()
@@ -39,6 +39,14 @@ test('isolates accounts and computes the net result of a round trip', async () =
       const { cookie: first } = await call('register', { name: 'Primeira', email: 'first@example.test', password })
       const { cookie: second } = await call('register', { name: 'Segunda', email: 'second@example.test', password })
       assert(first && second)
+      const mobile = await call('login', { email: 'first@example.test', password }, undefined, 200, { 'X-AlternaDrive-Client': 'android' })
+      assert.equal(mobile.cookie, undefined)
+      assert.match(mobile.result.token, /^[a-f0-9]{64}$/)
+      const bearer = { Authorization: 'Bearer ' + mobile.result.token }
+      assert.equal((await call('dashboard', undefined, undefined, 200, bearer)).result.user.email, 'first@example.test')
+      await call('logout', {}, undefined, 200, bearer)
+      await call('dashboard', undefined, undefined, 401, bearer)
+
       const { result: vehicle } = await call('vehicles', { name: 'Van', fuel: 'Gasolina', tank: 60, efficiency: 10, capacity: 8 }, first, 201)
       assert.equal(vehicle.type, 'car')
       const journeyData = { vehicleId: vehicle.id, startKm: 1000 }
