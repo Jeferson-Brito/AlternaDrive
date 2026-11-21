@@ -15,6 +15,6 @@ export type Dashboard = {
   active: Journey | null
   summaries: Summary[]
 }
-export type Closing = { revenue: number; profit: number | null; distance: number; startedAt: string; endedAt: string }
+export type Closing = { revenue: number; profit: number | null; distance: number; startedAt: string; endedAt: string; passengers: number; fuel: number | null; otherExpenses: number }
 export const money = (value: number | null) => value === null ? 'Pendente' : (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 export const numeric = parseNumber

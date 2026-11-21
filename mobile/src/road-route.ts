@@ -4,6 +4,7 @@ import { distanceMeters } from '../../src/arrival'
 import { navigationEstimate } from '../../src/journey-time'
 import { routeProgress, travelBearing, type RoadLine } from '../../src/route-geometry'
 import { api } from './api'
+import type { NearbyDriver } from './nearby-drivers'
 import type { Journey, Point } from './model'
 
 export const coords = ({ longitude, latitude }: Point): [number, number] => [longitude, latitude]
@@ -66,7 +67,12 @@ export function useRoadRoute({ a, b, active, position, token }: RouteInputs) {
   return { from, current, road, routeError, routeKey, estimate, heading: heading ?? 0 }
 }
 
-export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & { route: ReturnType<typeof useRoadRoute> }
+export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & {
+  route: ReturnType<typeof useRoadRoute>
+  following: boolean
+  onExplore: () => void
+  drivers: NearbyDriver[]
+}
 
 export const navigationPitch = 64
 export const navigationZoom = 17.8

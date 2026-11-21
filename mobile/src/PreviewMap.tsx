@@ -13,7 +13,7 @@ const previewPalette: MapStyleElement[] = [
   { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#e9eae8' }] },
   { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#e2e9e1' }] },
   { featureType: 'landscape.natural.landcover', elementType: 'geometry', stylers: [{ color: '#c8dfc7' }] },
-  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }, { weight: 2 }] },
   { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#d4d9d7' }] },
   { featureType: 'road.local', elementType: 'geometry.stroke', stylers: [{ color: '#e2e5e3' }] },
   { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }] },
@@ -29,7 +29,7 @@ const previewPalette: MapStyleElement[] = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#527384' }] },
 ]
 
-export function PreviewMap({ a, b, active, route, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
+export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
   const [ready, setReady] = useState(false)
@@ -37,24 +37,29 @@ export function PreviewMap({ a, b, active, route, decorative = false }: Partial<
   const center = active ? (current ?? from) : null
   const routeCoordinates = road?.geometry.coordinates.map(([longitude, latitude]) => ({ latitude, longitude }))
   useEffect(() => {
-    if (!ready) return
+    if (!ready || (active && !following)) return
     if (center) map.current?.animateCamera({
       center, zoom: navigationZoom, pitch: navigationPitch, heading: heading ?? 0,
     }, { duration: 550 })
     else if (a && b) map.current?.fitToCoordinates([a, b], { edgePadding: { top: 120, right: 48, bottom: 190, left: 48 } })
-  }, [ready, routeKey, center, heading, height])
+  }, [ready, routeKey, center, heading, height, following])
 
   return <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={initialRegion} customMapStyle={previewPalette}
     userInterfaceStyle="light" onMapReady={() => setReady(true)}
     scrollEnabled={!decorative} zoomEnabled={!decorative} rotateEnabled={!decorative} pitchEnabled={!decorative}
     showsBuildings={false} showsIndoorLevelPicker={false} showsIndoors={false} toolbarEnabled={false}
-    mapPadding={active ? navigationPadding(height) : undefined}>
+    mapPadding={active ? navigationPadding(height) : undefined}
+    onPanDrag={() => { if (active && following) onExplore?.() }}
+    onRegionChangeStart={(_, details) => { if (active && following && details?.isGesture) onExplore?.() }}>
     {routeCoordinates && <>
       <Polyline coordinates={routeCoordinates} strokeColor="#51329a" strokeWidth={8} zIndex={1} />
       <Polyline coordinates={routeCoordinates} strokeColor="#9763f1" strokeWidth={5} zIndex={2} />
     </>}
     {a && <Marker coordinate={a} title="Ponto A"><Text style={styles.pin}>A</Text></Marker>}
     {b && <Marker coordinate={b} title="Ponto B"><Text style={styles.pin}>B</Text></Marker>}
+    {drivers.map(driver => <Marker key={driver.id} coordinate={driver} title="Motorista próximo" anchor={{ x: .5, y: .5 }}>
+      <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} />
+    </Marker>)}
     {active && current && <Marker coordinate={current} title="Seu veículo" anchor={{ x: .5, y: .5 }}>
       <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} />
     </Marker>}

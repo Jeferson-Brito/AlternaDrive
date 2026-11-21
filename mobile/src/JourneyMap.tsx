@@ -16,14 +16,14 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
     <Camera initialViewState={cityView} />
   </Map>
 }
-export function JourneyMap({ a, b, active, route }: RouteView) {
+export function JourneyMap({ a, b, active, route, following, onExplore, drivers }: RouteView) {
   const camera = useRef<CameraRef>(null)
   const { height } = useWindowDimensions()
   const [loaded, setLoaded] = useState(false)
   const { from, current, road, heading, routeError, routeKey, estimate } = route
 
   useEffect(() => {
-    if (!loaded) return
+    if (!loaded || (active && !following)) return
     if (active) {
       const center = current ?? from
       if (center) camera.current?.easeTo({
@@ -36,10 +36,11 @@ export function JourneyMap({ a, b, active, route }: RouteView) {
         padding: { top: 120, bottom: 190, left: 40, right: 40 }, duration: 450, pitch: 0, bearing: 0,
       })
     }
-  }, [loaded, routeKey, current, heading, height])
+  }, [loaded, routeKey, current, heading, height, following])
 
   return <>
-    <Map style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}>
+    <Map style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}
+      onRegionWillChange={event => { if (active && following && event.nativeEvent.userInteraction) onExplore() }}>
       <Camera ref={camera} initialViewState={cityView} />
       {road && <GeoJSONSource id="journey" data={road.geometry}>
         <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
@@ -47,6 +48,9 @@ export function JourneyMap({ a, b, active, route }: RouteView) {
       </GeoJSONSource>}
       {a && <ViewAnnotation id="point-a" lngLat={coords(a)}><Text style={styles.pin}>A</Text></ViewAnnotation>}
       {b && <ViewAnnotation id="point-b" lngLat={coords(b)}><Text style={styles.pin}>B</Text></ViewAnnotation>}
+      {drivers.map(driver => <ViewAnnotation key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)}>
+        <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} />
+      </ViewAnnotation>)}
       {active && current && <ViewAnnotation id="driver" lngLat={coords(current)}>
         <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} />
       </ViewAnnotation>}

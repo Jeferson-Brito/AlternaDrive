@@ -77,6 +77,22 @@ test('isolates accounts and computes the net result of a round trip', async () =
       await call('journeys', journeyData, second, 404)
       const { result: journey } = await call('journeys', journeyData, first, 201)
       assert.deepEqual([journey.origin, journey.destination, journey.fare], ['Centro', 'Terminal', 700])
+      const presence = 'drivers/nearby'
+      const location = { latitude: -7.13219, longitude: -34.87132 }
+      assert.deepEqual((await call(presence, { center: location, journeyId: journey.id }, second)).result, [])
+      assert.deepEqual((await call(presence, { center: location, journeyId: journey.id }, first)).result, [])
+      let visible = (await call(presence, { center: location }, second)).result
+      assert.equal(visible.length, 1)
+      assert.deepEqual(Object.keys(visible[0]).sort(), ['id', 'latitude', 'longitude', 'type'])
+      assert.deepEqual([visible[0].latitude, visible[0].longitude], [-7.132, -34.871])
+      const anonymousId = visible[0].id
+      await call(presence, { center: { ...location, latitude: -7.13324 }, journeyId: journey.id }, first)
+      visible = (await call(presence, { center: location }, second)).result
+      assert.equal(visible[0].id, anonymousId)
+      assert.equal(visible[0].latitude, -7.133)
+      await call('drivers/hide', {}, first)
+      assert.deepEqual((await call(presence, { center: location }, second)).result, [])
+
       await call('journeys', journeyData, first, 409)
       const path = 'journeys/' + journey.id
       await call(path + '/boardings', { count: 1 }, second, 404)
@@ -107,7 +123,9 @@ test('isolates accounts and computes the net result of a round trip', async () =
       assert.deepEqual((await call('dashboard', undefined, first)).result.pendingLegs, [])
       assert.equal((await call('dashboard', undefined, first)).result.active.arrivals, 3)
       await call(path + '/finish', { km: 999 }, first, 422)
+      await call(presence, { center: location, journeyId: journey.id }, first)
       const closed = (await call(path + '/finish', { km: 1020 }, first)).result.closing
+      assert.deepEqual((await call(presence, { center: location }, second)).result, [])
       assert.equal(closed.passengers, 5)
       assert.equal(closed.revenue, 3500)
       assert.equal(closed.distance, 20)

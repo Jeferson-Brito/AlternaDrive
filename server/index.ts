@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
 import { combinedEfficiency } from './vehicle-efficiency'
 import { chartPeriods, dailyProfit, nextReportingDay, periods, summarize } from './finance'
+import { nearbyDrivers, removeDriver } from './driver-presence'
 import { findAddresses } from '../src/address-search'
 import { distanceMeters, isArrival } from '../src/arrival'
 import { habitualRoute, routeCheckpoints } from '../src/route-geometry'
@@ -128,6 +129,21 @@ app.get('/api/addresses', rateLimit({
   } catch {
     res.status(503).json({ error: 'Busca de endereços indisponível. Tente novamente.' })
   }
+})
+app.post('/api/drivers/nearby', rateLimit({
+  windowMs: 60_000, limit: 90, standardHeaders: 'draft-7', legacyHeaders: false,
+}), async (req, res) => {
+  const { center, journeyId } = z.object({ center: point, journeyId: id.optional() }).parse(req.body)
+  const userId = res.locals.user.id as string
+  const vehicle = journeyId && await prisma.journey.findFirst({
+    where: { id: journeyId, activeUserId: userId },
+    select: { vehicle: { select: { type: true } } },
+  })
+  res.json(nearbyDrivers(userId, center, vehicle ? vehicle.vehicle.type : undefined))
+})
+app.post('/api/drivers/hide', (_req, res) => {
+  removeDriver(res.locals.user.id)
+  res.json({ ok: true })
 })
 app.get('/api/dashboard', async (_req, res) => {
   const user: PublicUser = res.locals.user
@@ -396,6 +412,7 @@ app.post('/api/journeys/:id/:action', async (req, res) => {
   })
   if (!result.count) return res.status(409).json({ error: 'A jornada mudou. Atualize e tente novamente.' })
   if (action === 'turn') return res.json({ ok: true })
+  removeDriver(res.locals.user.id)
   const [boardings, expenses] = await Promise.all([
     prisma.boarding.findMany({ where: { journeyId: journey.id }, select: { count: true, fare: true } }),
     prisma.entry.aggregate({

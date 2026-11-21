@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
 import * as SecureStore from 'expo-secure-store'
@@ -12,14 +12,15 @@ import { VehicleForm } from './src/VehicleForm'
 import { RouteForm } from './src/RouteForm'
 import { Icon, IconButton, Metric, Shortcut } from './src/operation-ui'
 import { Report } from './src/Report'
+import { useNearbyDrivers } from './src/nearby-drivers'
 import { useRoadRoute } from './src/road-route'
 import { type Closing, type Dashboard, type Place, money, numeric } from './src/model'
 import { onArrival, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
 import { workDuration } from '../src/journey-time'
 
-type Panel = 'report' | 'menu' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
+type Panel = 'closing' | 'report' | 'menu' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
-  report: 'Lucro por dia', menu: 'Menu da operação', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
+  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
   group: 'Registrar grupo', finish: 'Finalizar jornada', fuel: 'Abastecimento', expense: 'Registrar despesa',
 }
 
@@ -47,6 +48,9 @@ function Operation() {
   const [period, setPeriod] = useState('month')
   const [hide, setHide] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [following, setFollowing] = useState(true)
+  const [sharingId, setSharingId] = useState<string>()
+  const [journeyClosing, setJourneyClosing] = useState<Closing>()
   const [position, setPosition] = useState<Location.LocationObject | null>(null)
   const [gpsStatus, setGpsStatus] = useState('')
   const [vehicleId, setVehicleId] = useState('')
@@ -109,7 +113,9 @@ function Operation() {
     setHide(next)
     void SecureStore.setItemAsync('alternadrive.hide-finances', String(next)).catch(() => undefined)
   }
-  useEffect(() => { setExpanded(false) }, [activeId])
+  const drivers = useNearbyDrivers(token, routeA, position?.coords && (position.coords.accuracy ?? Infinity) <= 50 ? position.coords : null,
+    activeId && sharingId === activeId ? activeId : undefined)
+  useEffect(() => { setExpanded(false); setFollowing(true); setSharingId(undefined) }, [activeId])
   useEffect(() => {
     if (!activeId) { setPosition(null); return }
     let watcher: Location.LocationSubscription | undefined
@@ -182,10 +188,8 @@ function Operation() {
     setData(previous => previous ? { ...previous, active: null } : previous)
     setGpsStatus('')
     show(null)
-    Alert.alert('Jornada finalizada', [
-      workDuration(closing.startedAt, closing.endedAt), closing.distance.toLocaleString('pt-BR') + ' km',
-      'Receita ' + (hide ? '••••' : money(closing.revenue)), 'Lucro estimado ' + (hide ? '••••' : money(closing.profit)),
-    ].join('\n'))
+    setJourneyClosing(closing)
+    show('closing')
     await reload(token)
   }
 
@@ -234,7 +238,8 @@ function Operation() {
   const minPrice = (input: string) => numeric(input) > 0
 
   return <View style={styles.root}>
-    <JourneyMap a={routeA} b={routeB} active={active ?? null} route={route} />
+    <JourneyMap a={routeA} b={routeB} active={active ?? null} route={route}
+      following={following} onExplore={() => setFollowing(false)} drivers={drivers} />
     <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
       {active ? <View style={styles.stats}>
         {statsContent}
@@ -245,7 +250,9 @@ function Operation() {
           <IconButton icon="menu" label="Menu da operação" onPress={() => show('menu')} />
         </View>
       </View>}
-      <View style={styles.card}>
+      {active && !following ? <View style={styles.recenter}>
+        <Button title="Recentralizar veículo" onPress={() => setFollowing(true)} />
+      </View> : <View style={styles.card}>
         {!!error && !panel && secureError}
         {active ? <>
           <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Recolher ações' : 'Expandir ações'}
@@ -276,6 +283,14 @@ function Operation() {
           </Pressable>
           {expanded && <>
             {!!gpsStatus && <Text style={ui.muted}>{gpsStatus}</Text>}
+            <View style={styles.sharing}>
+              <View style={styles.sharingCopy}>
+                <Text style={styles.label}>Aparecer no mapa de motoristas</Text>
+                <Text style={ui.muted}>Compartilha a posição aproximada enquanto o app está aberto nesta jornada.</Text>
+              </View>
+              <Switch accessibilityLabel="Aparecer no mapa de motoristas" value={sharingId === active.id}
+                onValueChange={enabled => setSharingId(enabled ? active.id : undefined)} />
+            </View>
             <Text style={ui.muted}>Tempo trabalhado · {workDuration(active.startedAt, Date.now())}</Text>
             <View style={styles.actionRow}>
               {active.vehicle.type !== 'motorcycle' && <Shortcut icon="users" text="Grupo" onPress={() => show('group')} />}
@@ -302,7 +317,7 @@ function Operation() {
           <Button title={data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veículo'}
             onPress={() => show(!data.vehicles.length ? 'vehicle' : !data.defaults.defaultPointA ? 'route' : 'start')} />
         </>}
-      </View>
+      </View>}
     </SafeAreaView>
 
     <Modal visible={panel !== null} transparent animationType="slide" onRequestClose={() => { if (!busy) show(null) }}>
@@ -312,6 +327,25 @@ function Operation() {
             <View style={styles.sheetHeader}><Text style={styles.title}>{panel && titles[panel]}</Text><IconButton icon="close" label="Fechar" disabled={busy} onPress={() => show(null)} /></View>
             <ScrollView key={panel} style={styles.scroll} contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
               {secureError}
+              {panel === 'closing' && journeyClosing && <>
+                <View style={styles.closingHero}>
+                  <Text style={styles.closingLabel}>Lucro líquido estimado</Text>
+                  <Text style={styles.closingValue}>{hide ? '••••' : money(journeyClosing.profit)}</Text>
+                </View>
+                <View style={styles.closingMetrics}>
+                  <Metric label="Tempo trabalhado" value={workDuration(journeyClosing.startedAt, journeyClosing.endedAt)} />
+                  <Metric label="Distância" value={journeyClosing.distance.toLocaleString('pt-BR') + ' km'} />
+                  <Metric label="Embarques" value={journeyClosing.passengers} />
+                </View>
+                <View style={styles.closingDetails}>
+                  {[['Receita bruta', journeyClosing.revenue], ['Combustível estimado', journeyClosing.fuel], ['Outras despesas', journeyClosing.otherExpenses]].map(([label, value]) =>
+                    <View key={String(label)} style={styles.closingRow}>
+                      <Text style={ui.label}>{label}</Text>
+                      <Text style={styles.label}>{hide ? '••••' : money(value as number | null)}</Text>
+                    </View>)}
+                </View>
+                <Button title="Voltar ao mapa" onPress={() => show(null)} />
+              </>}
               {panel === 'report' && <Report token={token} />}
               {panel === 'menu' && <>
                 <Button secondary title="Lucro por dia" onPress={() => show('report')} />
@@ -397,6 +431,15 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4, flexWrap: 'wrap' },
   stats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, gap: 4, borderRadius: 15, backgroundColor: '#13392e' },
+  recenter: { alignSelf: 'center', width: '83%', maxWidth: 340, paddingBottom: 9 },
+  sharing: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 10, backgroundColor: '#edf4f0' },
+  sharingCopy: { flex: 1, gap: 2 },
+  closingHero: { padding: 16, borderRadius: 15, backgroundColor: '#15362c', gap: 5 },
+  closingLabel: { color: '#cbe4da', fontWeight: '600' },
+  closingValue: { color: '#fff', fontSize: 26, fontWeight: '800' },
+  closingMetrics: { flexDirection: 'row', paddingVertical: 12, backgroundColor: '#edf4f0', borderRadius: 12, gap: 5 },
+  closingDetails: { backgroundColor: '#f6faf8', borderRadius: 12, padding: 10, gap: 5 },
+  closingRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 5, gap: 10 },
   headerActions: { flexDirection: 'row', gap: 5 },
   periodRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   segment: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#edf4f0' },
