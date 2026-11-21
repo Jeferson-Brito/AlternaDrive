@@ -37,7 +37,7 @@ export function useNearbyDrivers(token: string | null, center: Point | null, pos
       if (sharingJourney) pending.current = pending.current.then(() => api('drivers/hide', {}, token)).then(() => undefined, () => undefined)
     }
     refresh()
-    const timer = setInterval(refresh, 10_000)
+    const timer = setInterval(refresh, 3000)
     const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); else hide() })
     return () => { disposed = true; clearInterval(timer); listener.remove(); hide() }
   }, [token, sharingJourney])
