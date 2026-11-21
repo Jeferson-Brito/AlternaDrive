@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
-import { includeTypedStreetNumber, searchRouteAddresses, type AddressOption } from './address-options'
+import { includeTypedStreetNumber, searchDeviceAddresses, searchRouteAddresses, type AddressOption } from './address-options'
 import { formatNumberDigits } from '../../src/localized-number'
 import type { Place } from './model'
 
@@ -50,6 +50,7 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
   const [hint, setHint] = useState('')
   const [failed, setFailed] = useState(false)
   const [retry, setRetry] = useState(0)
+  const [useDevice, setUseDevice] = useState(false)
   useEffect(() => {
     setHint('')
     setFailed(false)
@@ -66,13 +67,15 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
         }
       }, 16000)
       try {
-        const places = await searchRouteAddresses(text.trim(), token, controller.signal)
+        const places = useDevice
+          ? await searchDeviceAddresses(text.trim())
+          : await searchRouteAddresses(text.trim(), token, controller.signal)
         if (controller.signal.aborted) return
         setMatches(places.map(place => includeTypedStreetNumber(text, place)))
         setHint(places.length ? '' : 'Sem sugestões. Tente incluir o bairro ou a cidade.')
-      } catch {
+      } catch (error) {
         if (!controller.signal.aborted) {
-          setHint('Busca indisponível. Tente novamente.')
+          setHint(useDevice && error instanceof Error ? error.message : 'Busca online indisponível.')
           setFailed(true)
         }
       } finally {
@@ -80,12 +83,15 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
       }
     }, 450)
     return () => { clearTimeout(timer); controller.abort() }
-  }, [text, value, retry, token])
+  }, [text, value, retry, token, useDevice])
 
   return <View style={ui.field}>
-    <Field label={label} placeholder={placeholder} value={text} maxLength={240} autoCorrect={false} onChangeText={input => { setText(input); setApproximate(false); onChange(null) }} />
+    <Field label={label} placeholder={placeholder} value={text} maxLength={240} autoCorrect={false} onChangeText={input => { setText(input); setUseDevice(false); setApproximate(false); onChange(null) }} />
     {!!hint && <Text style={ui.muted}>{hint}</Text>}
-    {failed && <Button title="Tentar busca novamente" secondary onPress={() => setRetry(value => value + 1)} />}
+    {failed && <>
+      <Button title="Tentar busca online novamente" secondary onPress={() => { setUseDevice(false); setRetry(value => value + 1) }} />
+      {!useDevice && <Button title="Buscar pelo Android" secondary onPress={() => setUseDevice(true)} />}
+    </>}
     {value && <Text style={approximate ? ui.approximate : ui.confirmed}>{approximate ? 'Número informado · localização aproximada na rua' : '✓ Endereço selecionado'}</Text>}
     {matches.length > 0 && <View style={ui.addressOptions}>
       {matches.map(place => {

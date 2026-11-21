@@ -1,3 +1,4 @@
+import * as Location from 'expo-location'
 import { findAddresses } from '../../src/address-search'
 import { api, ApiError } from './api'
 import type { Place } from './model'
@@ -39,4 +40,16 @@ export async function searchRouteAddresses(query: string, token: string, signal:
   return findAddresses('api/', {
     q: query, limit: '6', lat: '-7.132', lon: '-34.871', countrycode: 'BR',
   }, signal)
+}
+
+export async function searchDeviceAddresses(query: string): Promise<Place[]> {
+  const existing = await Location.getForegroundPermissionsAsync()
+  const permission = existing.granted ? existing : await Location.requestForegroundPermissionsAsync()
+  if (!permission.granted) throw new Error('Permita a localização para usar a busca do Android.')
+  const localQuery = /jo[aã]o pessoa|cabedelo|para[ií]ba|,/.test(query.toLowerCase())
+    ? query : query + ', João Pessoa, Paraíba'
+  const matches = await Location.geocodeAsync(localQuery)
+  return matches.slice(0, 5).map(({ latitude, longitude }) => ({
+    latitude, longitude, label: localQuery.slice(0, 240),
+  }))
 }
