@@ -5,6 +5,7 @@ import { distanceMeters } from '../../src/arrival'
 import { api } from './api'
 import { JourneyMap } from './AppMap'
 import { Button, Field, ui } from './controls'
+import { adjustToStreets } from './adjust-route'
 import { coords, useRoadRoute } from './road-route'
 import type { Point } from './model'
 
@@ -22,6 +23,8 @@ export function Admin({ token, center = city, close }: { token: string; center?:
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [sketch, setSketch] = useState<{ point: Point; stroke: symbol }[]>([])
+  const [adjusted, setAdjusted] = useState<Point[]>()
+  const [adjusting, setAdjusting] = useState(false)
   const [drawRevision, setDrawRevision] = useState(0)
   const [pencil, setPencil] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -58,7 +61,7 @@ export function Admin({ token, center = city, close }: { token: string; center?:
   }
 
   if (section === 'draw') {
-    const points = viewing?.points ?? sketch.map(({ point }) => point)
+    const points = viewing?.points ?? adjusted ?? sketch.map(({ point }) => point)
     const shape = points.length > 1 ? {
       geometry: { type: 'LineString' as const, coordinates: points.map(coords) }, distance: 0, duration: 0,
     } : undefined
@@ -68,7 +71,7 @@ export function Admin({ token, center = city, close }: { token: string; center?:
       <JourneyMap a={points[0] ?? null} b={end} active={null} drivers={[]} route={{ ...emptyRoute, road: shape }}
         following onExplore={() => undefined} passengerCenter={viewing?.points[0] ?? center} routeEditor
         drawRevision={drawRevision}
-        drawPoint={pencil && !busy ? (point, stroke) => setSketch(current => {
+        drawPoint={pencil && !busy && !adjusted ? (point, stroke) => setSketch(current => {
           const last = current.at(-1)?.point
           if (last && distanceMeters(last, point) < 5) return current
           const retained = current.length < 300 ? current : current.filter((sample, index) =>
@@ -81,17 +84,27 @@ export function Admin({ token, center = city, close }: { token: string; center?:
             : <Field label="Nome da rota" value={name} onChangeText={setName} maxLength={100} />}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           {!viewing && <>
-            <Text style={ui.muted}>{pencil ? 'Arraste pelas ruas. Solte o dedo para encerrar cada trecho.'
+            <Text style={ui.muted}>{adjusted ? 'Confira a rota ajustada no mapa antes de publicar.'
+              : pencil ? 'Arraste pelas ruas. Solte o dedo para encerrar cada trecho.'
               : 'Aproxime o mapa e ative o lápis para traçar a rota.'}</Text>
             <View style={styles.actions}>
-              <Button title={pencil ? '✓ Lápis ativo' : '✎ Lápis'} secondary={!pencil} onPress={() => setPencil(value => !value)} />
-              <Button title="Desfazer trecho" secondary disabled={busy || !sketch.length} onPress={() => {
+              <Button disabled={busy || !!adjusted} title={pencil ? '✓ Lápis ativo' : '✎ Lápis'} secondary={!pencil} onPress={() => setPencil(value => !value)} />
+              <Button title="Desfazer trecho" secondary disabled={busy || !!adjusted || !sketch.length} onPress={() => {
                 setDrawRevision(revision => revision + 1)
                 setSketch(current => current.filter(sample => sample.stroke !== current.at(-1)?.stroke))
               }} />
-              <Button title="Limpar desenho" secondary disabled={busy || !points.length} onPress={() => { setPencil(false); setSketch([]) }} />
+              <Button title="Limpar desenho" secondary disabled={busy || !points.length} onPress={() => { setPencil(false); setAdjusted(undefined); setSketch([]) }} />
             </View>
-            <Button title={busy ? 'Salvando…' : 'Publicar rota'} disabled={busy || !valid || !name.trim()} onPress={() => {
+            {adjusted ? <Button title="Voltar ao desenho original" secondary disabled={busy} onPress={() => setAdjusted(undefined)} />
+              : <Button title={adjusting ? 'Ajustando…' : 'Ajustar às ruas'} secondary disabled={busy || !valid} onPress={() => {
+                setPencil(false)
+                void run(async () => {
+                  setAdjusting(true)
+                  try { setAdjusted(await adjustToStreets(points)) }
+                  finally { setAdjusting(false) }
+                })
+              }} />}
+            <Button title={busy && !adjusting ? 'Salvando…' : 'Publicar rota'} disabled={busy || !valid || !name.trim()} onPress={() => {
               setPencil(false)
               void run(async () => {
                 const saved = await api<SavedRoute>('admin/routes', { name: name.trim(), points }, token)
@@ -116,7 +129,7 @@ export function Admin({ token, center = city, close }: { token: string; center?:
         <Button title="Motoristas" onPress={() => { setSection('drivers'); void run(() => loadDrivers()) }} />
       </>}
       {section === 'routes' && <>
-        <Button title="Criar rota habitual" onPress={() => { setViewing(undefined); setName(''); setSketch([]); setSection('draw') }} />
+        <Button title="Criar rota habitual" onPress={() => { setViewing(undefined); setName(''); setAdjusted(undefined); setSketch([]); setSection('draw') }} />
         {!routes.length && !busy && <Text style={ui.muted}>Nenhuma rota manual cadastrada.</Text>}
         {routes.map(route => <Button key={route.id} secondary title={route.name} onPress={() => {
           setViewing(route); setSection('draw')
