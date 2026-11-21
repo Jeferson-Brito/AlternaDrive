@@ -23,7 +23,7 @@ export function includeTypedStreetNumber(query: string, place: Place): AddressOp
   }
 }
 
-export async function searchRouteAddresses(query: string, token: string, signal: AbortSignal) {
+async function searchOnlineAddresses(query: string, token: string, signal: AbortSignal) {
   const proxy = new AbortController()
   const abortProxy = () => proxy.abort()
   signal.addEventListener('abort', abortProxy)
@@ -42,9 +42,9 @@ export async function searchRouteAddresses(query: string, token: string, signal:
   }, signal)
 }
 
-export async function searchDeviceAddresses(query: string): Promise<Place[]> {
+async function searchDeviceAddresses(query: string): Promise<Place[]> {
   const existing = await Location.getForegroundPermissionsAsync()
-  const permission = existing.granted ? existing : await Location.requestForegroundPermissionsAsync()
+  const permission = existing.granted || !existing.canAskAgain ? existing : await Location.requestForegroundPermissionsAsync()
   if (!permission.granted) throw new Error('Permita a localização para usar a busca do Android.')
   const localQuery = /jo[aã]o pessoa|cabedelo|para[ií]ba|,/.test(query.toLowerCase())
     ? query : query + ', João Pessoa, Paraíba'
@@ -52,4 +52,21 @@ export async function searchDeviceAddresses(query: string): Promise<Place[]> {
   return matches.slice(0, 5).map(({ latitude, longitude }) => ({
     latitude, longitude, label: localQuery.slice(0, 240),
   }))
+}
+
+export async function searchRouteAddresses(query: string, token: string, signal: AbortSignal) {
+  const online = new AbortController()
+  const cancel = () => online.abort()
+  signal.addEventListener('abort', cancel)
+  if (signal.aborted) cancel()
+  const timeout = setTimeout(cancel, 10_000)
+  try {
+    return await searchOnlineAddresses(query, token, online.signal)
+  } catch (error) {
+    if (signal.aborted) throw error
+  } finally {
+    clearTimeout(timeout)
+    signal.removeEventListener('abort', cancel)
+  }
+  return searchDeviceAddresses(query)
 }
