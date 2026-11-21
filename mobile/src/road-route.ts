@@ -83,7 +83,8 @@ export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & {
   onExplore: () => void
   drivers: NearbyDriver[]
   demand?: StopDemand[]
-  drawPoint?: (point: Point) => void
+  drawPoint?: (point: Point, stroke: symbol) => void
+  drawRevision?: number
   routeEditor?: boolean
   carColor?: string | null
   passengerCenter?: Point

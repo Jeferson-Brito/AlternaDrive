@@ -21,7 +21,8 @@ export function Admin({ token, center = city, close }: { token: string; center?:
   const [viewing, setViewing] = useState<SavedRoute>()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [points, setPoints] = useState<Point[]>([])
+  const [sketch, setSketch] = useState<{ point: Point; stroke: symbol }[]>([])
+  const [drawRevision, setDrawRevision] = useState(0)
   const [pencil, setPencil] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -57,6 +58,7 @@ export function Admin({ token, center = city, close }: { token: string; center?:
   }
 
   if (section === 'draw') {
+    const points = viewing?.points ?? sketch.map(({ point }) => point)
     const shape = points.length > 1 ? {
       geometry: { type: 'LineString' as const, coordinates: points.map(coords) }, distance: 0, duration: 0,
     } : undefined
@@ -65,11 +67,13 @@ export function Admin({ token, center = city, close }: { token: string; center?:
     return <View style={styles.map}>
       <JourneyMap a={points[0] ?? null} b={end} active={null} drivers={[]} route={{ ...emptyRoute, road: shape }}
         following onExplore={() => undefined} passengerCenter={viewing?.points[0] ?? center} routeEditor
-        drawPoint={pencil && !busy ? point => setPoints(current => {
-          const last = current[current.length - 1]
+        drawRevision={drawRevision}
+        drawPoint={pencil && !busy ? (point, stroke) => setSketch(current => {
+          const last = current.at(-1)?.point
           if (last && distanceMeters(last, point) < 5) return current
-          const retained = current.length < 300 ? current : current.filter((_, index) => index % 2 === 0)
-          return [...retained, point]
+          const retained = current.length < 300 ? current : current.filter((sample, index) =>
+            index % 2 === 0 || sample.stroke !== current[index - 1]?.stroke)
+          return [...retained.slice(0, 299), { point, stroke }]
         }) : undefined} />
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <View style={styles.card}>
@@ -77,11 +81,15 @@ export function Admin({ token, center = city, close }: { token: string; center?:
             : <Field label="Nome da rota" value={name} onChangeText={setName} maxLength={100} />}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           {!viewing && <>
-            <Text style={ui.muted}>{pencil ? 'Arraste o dedo sobre as ruas, da origem até o destino.'
+            <Text style={ui.muted}>{pencil ? 'Arraste pelas ruas. Solte o dedo para encerrar cada trecho.'
               : 'Aproxime o mapa e ative o lápis para traçar a rota.'}</Text>
             <View style={styles.actions}>
               <Button title={pencil ? '✓ Lápis ativo' : '✎ Lápis'} secondary={!pencil} onPress={() => setPencil(value => !value)} />
-              <Button title="Limpar desenho" secondary disabled={busy || !points.length} onPress={() => { setPencil(false); setPoints([]) }} />
+              <Button title="Desfazer trecho" secondary disabled={busy || !sketch.length} onPress={() => {
+                setDrawRevision(revision => revision + 1)
+                setSketch(current => current.filter(sample => sample.stroke !== current.at(-1)?.stroke))
+              }} />
+              <Button title="Limpar desenho" secondary disabled={busy || !points.length} onPress={() => { setPencil(false); setSketch([]) }} />
             </View>
             <Button title={busy ? 'Salvando…' : 'Publicar rota'} disabled={busy || !valid || !name.trim()} onPress={() => {
               setPencil(false)
@@ -108,10 +116,10 @@ export function Admin({ token, center = city, close }: { token: string; center?:
         <Button title="Motoristas" onPress={() => { setSection('drivers'); void run(() => loadDrivers()) }} />
       </>}
       {section === 'routes' && <>
-        <Button title="Criar rota habitual" onPress={() => { setViewing(undefined); setName(''); setPoints([]); setSection('draw') }} />
+        <Button title="Criar rota habitual" onPress={() => { setViewing(undefined); setName(''); setSketch([]); setSection('draw') }} />
         {!routes.length && !busy && <Text style={ui.muted}>Nenhuma rota manual cadastrada.</Text>}
         {routes.map(route => <Button key={route.id} secondary title={route.name} onPress={() => {
-          setViewing(route); setPoints(route.points); setSection('draw')
+          setViewing(route); setSection('draw')
         }} />)}
       </>}
       {section === 'drivers' && <>

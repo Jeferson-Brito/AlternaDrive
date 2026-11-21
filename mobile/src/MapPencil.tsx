@@ -4,9 +4,10 @@ import type { Point } from './model'
 
 export function MapPencil({ locate, onPoint }: {
   locate: (x: number, y: number) => Promise<Point | undefined>
-  onPoint: (point: Point) => void
+  onPoint: (point: Point, stroke: symbol) => void
 }) {
-  const queued = useRef<{ x: number; y: number } | undefined>(undefined)
+  const queued = useRef<{ x: number; y: number; stroke: symbol } | undefined>(undefined)
+  const stroke = useRef(Symbol())
   const running = useRef(false)
 
   const mounted = useRef(true)
@@ -16,21 +17,21 @@ export function MapPencil({ locate, onPoint }: {
   }, [])
 
   function trace(event: GestureResponderEvent) {
-    queued.current = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
+    queued.current = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY, stroke: stroke.current }
     if (running.current) return
     running.current = true
     void (async () => {
       try {
         while (queued.current) {
-          const { x, y } = queued.current
+          const { x, y, stroke } = queued.current
           queued.current = undefined
           const point = await locate(x, y)
-          if (point && mounted.current) onPoint(point)
+          if (point && mounted.current) onPoint(point, stroke)
         }
       } finally { running.current = false }
     })().catch(() => undefined)
   }
 
   return <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true}
-    onResponderGrant={trace} onResponderMove={trace} onResponderRelease={trace} />
+    onResponderGrant={event => { stroke.current = Symbol(); trace(event) }} onResponderMove={trace} onResponderRelease={trace} />
 }

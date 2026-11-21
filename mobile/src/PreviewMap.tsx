@@ -40,7 +40,7 @@ function PreviewRouteHighlight({ road }: { road: RoadLine }) {
     strokeColor={band.color} strokeWidth={band.width} lineCap="round" lineJoin="round" zIndex={3 + index} />)}</>
 }
 
-export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, waitingStop, drawPoint, routeEditor, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
+export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, waitingStop, drawPoint, drawRevision, routeEditor, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
   const [ready, setReady] = useState(false)
@@ -83,7 +83,7 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
       <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
     </Marker>}
   </MapView>
-    {drawPoint && <MapPencil onPoint={drawPoint} locate={async (x, y) =>
+    {drawPoint && <MapPencil key={drawRevision} onPoint={drawPoint} locate={async (x, y) =>
       map.current?.coordinateForPoint({ x, y })} />}
   </>
 }
