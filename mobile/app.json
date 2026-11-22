@@ -2,14 +2,14 @@
   "expo": {
     "name": "AlternaDrive",
     "slug": "alternadrive",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "orientation": "portrait",
     "platforms": [
       "android"
     ],
     "android": {
       "package": "com.alternadrive.app",
-      "versionCode": 2
+      "versionCode": 3
     },
     "plugins": [
       "expo-secure-store",
@@ -21,7 +21,8 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "./plugins/with-windows-build-paths"
+      "./plugins/with-windows-build-paths",
+      "./plugins/with-android-release"
     ],
     "icon": "./assets/alternadrive.png"
   }
