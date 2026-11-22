@@ -31,14 +31,14 @@ export function changeDriverSharing(journeyId: string, shared: boolean, token: s
 }
 
 export function refreshDriverPresence(token: string, center: Point, journeyId?: string,
-    route?: { departure: Point; duration: number; coordinates: Coordinates[] }) {
+    route?: { departure: Point; duration: number; coordinates: Coordinates[] }, fix?: Point & { accuracy: number }) {
   return inOrder(async () => {
     const publishing = journeyId && (await hiddenDriverJourney()) !== journeyId
     const signal = new AbortController()
     const timeout = setTimeout(() => signal.abort(), 7000)
     try {
       return await api<NearbyDriver[]>('drivers/nearby', {
-        center, journeyId: publishing ? journeyId : undefined, route: publishing ? route : undefined,
+        center, journeyId: publishing ? journeyId : undefined, route: publishing ? route : undefined, fix: publishing && fix && fix.accuracy <= 20 ? fix : undefined,
       }, token, signal.signal)
     } finally { clearTimeout(timeout) }
   })

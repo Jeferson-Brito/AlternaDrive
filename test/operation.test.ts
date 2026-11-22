@@ -9,6 +9,7 @@ import { remainingRoad, routeProgress, travelBearing, type RoadLine } from '../s
 import { navigationEstimate, workDuration } from '../src/journey-time'
 import { formatNumberDigits, parseNumber } from '../src/localized-number'
 import { nextManeuver } from '../src/navigation-steps'
+import { clearBoardingDetection, detectBoarding } from '../server/boarding-detection'
 import { accumulateDistance, emptyTrack } from '../src/gps-distance'
 import { dailyProfit, nextReportingDay } from '../server/finance'
 
@@ -89,7 +90,7 @@ test('isolates accounts and computes the net result of a round trip', async () =
       assert.deepEqual((await call(presence, { center: location, journeyId: journey.id }, first)).result, [])
       let visible = (await call(presence, { center: location }, second)).result
       assert.equal(visible.length, 1)
-      assert.deepEqual(Object.keys(visible[0]).sort(), ['id', 'latitude', 'longitude', 'type'])
+      assert.deepEqual(Object.keys(visible[0]).sort(), ['carColor', 'firstName', 'id', 'latitude', 'longitude', 'type'])
       assert.deepEqual([visible[0].latitude, visible[0].longitude], [-7.132, -34.871])
       const anonymousId = visible[0].id
       await call(presence, { center: { ...location, latitude: -7.13324 }, journeyId: journey.id }, first)
@@ -298,6 +299,16 @@ test('isolates accounts and computes the net result of a round trip', async () =
       assert.deepEqual(await arrivesAt(1), { arrivals: 0, approachingStart: true })
       assert.deepEqual(await arrivesAt(0), { arrivals: 0, approachingStart: false })
       assert.deepEqual(await arrivesAt(1), { arrivals: 1, approachingStart: false })
+      const suggestionId = 'a451f4e8-5d12-47cf-baa6-39d8c6eaf501'
+      await prisma.boardingSuggestion.create({ data: { id: suggestionId, journeyId: approachJourney.id } })
+      const suggestionPath = tripPath + '/boarding-suggestions'
+      assert.deepEqual((await call(suggestionPath, undefined, signedIn)).result, [])
+      await call(suggestionPath + '/' + suggestionId, { action: 'confirm' }, signedIn, 404)
+      await call(suggestionPath + '/' + suggestionId, { action: 'confirm' }, driver.cookie)
+      await call(suggestionPath + '/' + suggestionId, { action: 'confirm' }, driver.cookie)
+      assert.equal(await prisma.boarding.count({ where: { journeyId: approachJourney.id } }), 1)
+      await call(suggestionPath + '/' + suggestionId, { action: 'undo' }, driver.cookie)
+      assert.equal(await prisma.boarding.count({ where: { journeyId: approachJourney.id } }), 0)
       const measuredClosing = (await call(tripPath + '/finish', { km: 132 }, driver.cookie)).result.closing
       assert.equal(measuredClosing.distance, 102)
       assert.equal(measuredClosing.fuel, 6120)
@@ -402,4 +413,25 @@ test('counts real GPS movement only once and ignores jitter and implausible jump
   assert.equal(accumulateDistance(trip, moving), trip)
   assert.equal(accumulateDistance(trip, { ...moving, timestamp: 8000, accuracy: 60 }), trip)
   assert.equal(accumulateDistance(trip, { ...moving, timestamp: 8000, longitude: 1 }).meters, trip.meters)
+})
+
+
+test('suggests a boarding only after shared movement and skips two indistinguishable vehicles', () => {
+  const start = { latitude: 0, longitude: 0 }
+  const vehicles = (point: typeof start, at: number, ambiguous: boolean) =>
+    (ambiguous ? ['car-a', 'car-b'] : ['car-a']).map(journeyId => ({ ...point, at, journeyId }))
+  for (const ambiguous of [false, true]) {
+    const session = 'boarding-' + ambiguous
+    const base = 1_000_000
+    assert.equal(detectBoarding(session, start, start, [], base), undefined)
+    assert.equal(detectBoarding(session, start, start, vehicles(start, base + 12_000, ambiguous), base + 12_000), undefined)
+    for (let tick = 1; tick <= 4; tick++) {
+      const now = base + 12_000 + tick * 3000
+      const position = { latitude: 0, longitude: tick * .00026 }
+      const result = detectBoarding(session, position, start, vehicles(position, now, ambiguous), now)
+      if (tick < 4 || ambiguous) assert.equal(result, undefined)
+      else assert.equal(result?.journeyId, 'car-a')
+    }
+    clearBoardingDetection(session)
+  }
 })

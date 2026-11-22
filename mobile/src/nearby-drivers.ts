@@ -7,7 +7,7 @@ import type { Point } from './model'
 export type NearbyDriver = Point & { id: string; type: string; firstName?: string; carColor?: string | null; arrivalSeconds?: number }
 const city = { latitude: -7.132, longitude: -34.871 }
 
-export function useNearbyDrivers(token: string | null, center: Point | null, position: Point | null, sharingJourney?: string, road?: { geometry: RoadLine; duration: number }) {
+export function useNearbyDrivers(token: string | null, center: Point | null, position: (Point & { accuracy?: number | null }) | null, sharingJourney?: string, road?: { geometry: RoadLine; duration: number }) {
   const [drivers, setDrivers] = useState<NearbyDriver[]>([])
   const latest = useRef({ center, position, road })
   const pending = useRef<Promise<void>>(Promise.resolve())
@@ -35,7 +35,8 @@ export function useNearbyDrivers(token: string | null, center: Point | null, pos
             duration: road.duration,
             coordinates: coordinates.filter((_, index) => index % stride === 0 || index === coordinates.length - 1),
           } : undefined
-          const result = await refreshDriverPresence(session, coarse, journeyId, route)
+          const result = await refreshDriverPresence(session, coarse, journeyId, route,
+            position && position.accuracy != null ? { latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy } : undefined)
           if (!disposed) setDrivers(result)
         } catch {
           if (!disposed) setDrivers([])

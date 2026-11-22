@@ -1,3 +1,4 @@
+import type { MovingDriver } from './boarding-detection'
 import { randomUUID } from 'node:crypto'
 import { routeProgress, type Coordinates } from '../src/route-geometry'
 import { distanceMeters, type Point } from '../src/arrival'
@@ -6,12 +7,24 @@ type DriverRoute = { coordinates: Coordinates[]; duration: number; departure: Po
 type DriverProfile = { name: string; carColor: string | null }
 type Driver = Point & { id: string; type: string; expiresAt: number; firstName?: string; carColor?: string | null; route?: DriverRoute }
 
+const privatePositions = new Map<string, MovingDriver>()
+export function matchingDrivers(now = Date.now()) {
+  for (const [id, fix] of privatePositions) if (now - fix.at > 8500) privatePositions.delete(id)
+  return [...privatePositions.values()]
+}
+
+export function rememberDriverFix(userId: string, journeyId: string, fix: Point, now = Date.now()) {
+  matchingDrivers(now)
+  privatePositions.set(userId, { ...fix, journeyId, at: now })
+}
+
 const online = new Map<string, Driver>()
 const ttl = 45_000
 const radius = 15_000
 
 export function removeDriver(userId: string) {
   online.delete(userId)
+  privatePositions.delete(userId)
 }
 
 export function nearbyDrivers(userId: string | null, center: Point, type?: string, now = Date.now(), route?: DriverRoute, stop?: Point, profile?: DriverProfile) {

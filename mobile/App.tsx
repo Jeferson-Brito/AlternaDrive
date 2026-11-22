@@ -16,6 +16,7 @@ import { Startup } from './src/Startup'
 import { StartJourneyForm } from './src/StartJourneyForm'
 import { RouteForm } from './src/RouteForm'
 import { Icon, IconButton, MenuRow, Metric, Shortcut } from './src/operation-ui'
+import { disablePassengerBackground } from './src/passenger-tracking'
 import { Passenger, usePassengerDemand } from './src/Passenger'
 import { DriverMarker } from './src/DriverMarker'
 import { carColors, defaultCarColor } from '../src/car-colors'
@@ -36,9 +37,11 @@ if (!isExpoGo) {
 
 type StartChoice = 'approach' | 'direct' | 'cancel'
 
-type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'password' | 'editVehicle' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
+type Suggestion = { id: string; detectedAt: string; status: 'pending' | 'confirmed' }
+
+type Panel = 'suggestions' | 'closing' | 'report' | 'menu' | 'profile' | 'password' | 'editVehicle' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
-  closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', profile: 'Perfil do motorista', password: 'Alterar senha', editVehicle: 'Editar veículo', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
+  suggestions: 'Embarques detectados', closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', profile: 'Perfil do motorista', password: 'Alterar senha', editVehicle: 'Editar veículo', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
   group: 'Registrar grupo', finish: 'Finalizar jornada', fuel: 'Abastecimento', expense: 'Registrar despesa',
 }
 
@@ -60,6 +63,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
   const dashboardRevision = useRef(0)
   const [pendingBoarding, setPendingBoarding] = useState(0)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [passenger, setPassenger] = useState(false)
   const [register, setRegister] = useState(false)
   const [visiblePassword, setVisiblePassword] = useState(false)
@@ -154,6 +158,22 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
 
   const active = data?.active
   const activeId = active?.id
+  const refreshSuggestions = useCallback(async () => {
+    if (!activeId || !token) return
+    const next = await api<Suggestion[]>('journeys/' + activeId + '/boarding-suggestions', undefined, token)
+    setSuggestions(next)
+  }, [activeId, token])
+
+  useEffect(() => {
+    setSuggestions([])
+    if (!activeId || !token) return
+    const refresh = () => {
+      if (AppState.currentState === 'active') void refreshSuggestions().catch(() => undefined)
+    }
+    refresh()
+    const timer = setInterval(refresh, 7000)
+    return () => clearInterval(timer)
+  }, [activeId, token, refreshSuggestions])
   const routeA = active?.pointA ?? data?.defaults.defaultPointA ?? null
   const routeB = active?.pointB ?? data?.defaults.defaultPointB ?? null
   const route = useRoadRoute({ a: routeA, b: routeB, active: active ?? null, position, token: token ?? '' })
@@ -305,6 +325,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
       if (choice === 'cancel') return
       if (choice === 'approach') approachFrom = { latitude: fix.coords.latitude, longitude: fix.coords.longitude }
     }
+    void disablePassengerBackground().catch(() => undefined)
     const created = await api<NonNullable<Dashboard['active']>>('journeys', {
       vehicleId, startKm: numeric(first), currentLocation, approachFrom,
     }, token)
@@ -365,6 +386,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
               <Button title={register ? 'Cadastrar' : 'Entrar'} disabled={busy} onPress={() => void run(async () => {
                 const session = await authenticate(register ? 'register' : 'login', register ? { email, password, name } : { email, password })
                 setPassword('')
+                void disablePassengerBackground().catch(() => undefined)
                 setToken(session)
                 await reload(session)
               })} />
@@ -473,6 +495,8 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
             <Text style={ui.buttonText}>Passageiro</Text>
             <Text style={styles.fareBadge}>{money(active.fare)}</Text>
           </Pressable>
+          {suggestions.some(item => item.status === 'pending') && <Button secondary title="Revisar embarques detectados"
+            onPress={() => show('suggestions')} />}
           {expanded && <Animated.View style={[styles.expandedActions, { opacity: actionsOpacity }]}>
             {!!gpsStatus && <Text style={ui.muted}>{gpsStatus}</Text>}
             <View style={styles.sharing}>
@@ -486,6 +510,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
                   void run(() => changeDriverSharing(active.id, enabled, token))
                 }} />
             </View>
+            {suggestions.length > 0 && <Button secondary title="Embarques detectados" onPress={() => show('suggestions')} />}
             <Text style={ui.muted}>Tempo trabalhado · {workDuration(active.startedAt, Date.now())}</Text>
             <View style={styles.actionRow}>
               {active.vehicle.type !== 'motorcycle' && <Shortcut icon="users" text="Grupo" onPress={() => show('group')} />}
@@ -565,6 +590,23 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
                     </View>)}
                 </View>
                 <Button title="Voltar ao mapa" onPress={() => show(null)} />
+              </>}
+              {panel === 'suggestions' && active && <>
+                <Text style={ui.muted}>Confira os embarques sugeridos. Confirme só se o passageiro entrou e ainda não foi registrado.</Text>
+                {!suggestions.length && <Text style={ui.muted}>Nenhum embarque detectado nesta jornada.</Text>}
+                {suggestions.map(suggestion => {
+                  const review = (action: 'confirm' | 'dismiss' | 'undo') => void run(async () => {
+                    await api('journeys/' + active.id + '/boarding-suggestions/' + suggestion.id, { action }, token)
+                    await Promise.all([refreshSuggestions(), reload(token)])
+                  })
+                  return <View key={suggestion.id} style={styles.routePreview}>
+                    <Text style={styles.label}>{suggestion.status === 'confirmed' ? 'Embarque confirmado' : 'Possível embarque'} · {new Date(suggestion.detectedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
+                    {suggestion.status === 'pending' ? <>
+                      <Button title="Confirmar embarque" disabled={busy} onPress={() => review('confirm')} />
+                      <Button secondary title="Descartar" disabled={busy} onPress={() => review('dismiss')} />
+                    </> : <Button secondary title="Desfazer embarque" disabled={busy} onPress={() => review('undo')} />}
+                  </View>
+                })}
               </>}
               {panel === 'report' && <Report token={token} />}
               {panel === 'profile' && <>

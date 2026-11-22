@@ -78,6 +78,7 @@ model Journey {
   endedAt        DateTime?
   boardings      Boarding[]
   completedLegs  CompletedLeg[]
+  boardingSuggestions BoardingSuggestion[]
   @@index([userId, startedAt])
 }
 model Boarding {
@@ -165,4 +166,15 @@ model ManualRoute {
   createdAt   DateTime @default(now())
 
   @@index([fromLat, toLat])
+}
+
+model BoardingSuggestion {
+  id         String   @id
+  journeyId  String
+  journey    Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  detectedAt DateTime @default(now())
+  status     String   @default("pending")
+  boardingId String?
+
+  @@index([journeyId, status])
 }

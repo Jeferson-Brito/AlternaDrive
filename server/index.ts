@@ -9,7 +9,8 @@ import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
 import { combinedEfficiency } from './vehicle-efficiency'
 import { chartPeriods, dailyProfit, nextReportingDay, periods, summarize } from './finance'
-import { nearbyDrivers, removeDriver } from './driver-presence'
+import { matchingDrivers, nearbyDrivers, rememberDriverFix, removeDriver } from './driver-presence'
+import { clearBoardingDetection, detectBoarding, passengerOnboard } from './boarding-detection'
 import { closestServedStop, findStops, stopDemand, updateWaiting } from './passenger-presence'
 import { carColors } from '../src/car-colors'
 import { findAddresses } from '../src/address-search'
@@ -109,7 +110,9 @@ const passengerSession = z.string().uuid()
 const routePoint = z.array(point).length(7)
 const manualPoints = z.array(point).min(2).max(300)
 app.post('/api/passenger/map', passengerLimit, async (req, res) => {
-  const { position, session } = z.object({ position: point, session: passengerSession.optional() }).parse(req.body)
+  const { position, session, accuracy, capturedAt } = z.object({
+    position: point, session: passengerSession.optional(), accuracy: z.number().min(0).max(100).optional(), capturedAt: z.number().optional(),
+  }).parse(req.body)
   const stops = await findStops(position)
   const around = (value: number) => ({ gte: value - .18, lte: value + .18 })
   const samples = stops.length ? await prisma.routeExperience.findMany({
@@ -144,11 +147,21 @@ app.post('/api/passenger/map', passengerLimit, async (req, res) => {
     }
   }
   const stop = closestServedStop(position, stops, routes)
-  res.json({ stop, session: updateWaiting(session, stop), drivers: nearbyDrivers(null, position, undefined, Date.now(), undefined, stop ?? undefined) })
+  const passengerId = updateWaiting(session, stop)
+  const now = Date.now()
+  const match = accuracy != null && accuracy <= 20 && capturedAt != null && Math.abs(now - capturedAt) <= 12_000
+    ? detectBoarding(passengerId, position, stop, matchingDrivers(), capturedAt) : undefined
+  if (match) {
+    await prisma.boardingSuggestion.upsert({ where: { id: match.id }, create: match, update: {} })
+  }
+  const visibleStop = passengerOnboard(passengerId) ? null : stop
+  if (!visibleStop) updateWaiting(passengerId, null)
+  res.json({ stop: visibleStop, session: passengerId, drivers: nearbyDrivers(null, position, undefined, now, undefined, visibleStop ?? undefined) })
 })
 app.post('/api/passenger/hide', passengerLimit, (req, res) => {
   const { session } = z.object({ session: passengerSession }).parse(req.body)
   updateWaiting(session, null)
+  clearBoardingDetection(session)
   res.json({ ok: true })
 })
 app.use('/api', async (req, res, next) => {
@@ -225,12 +238,17 @@ app.post('/api/drivers/nearby', rateLimit({
   const coordinates = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
   const routeSchema = z.object({ coordinates: z.array(coordinates).min(2).max(400),
     duration: z.number().positive().max(86_400), departure: point })
-  const { center, journeyId, route } = z.object({ center: point, journeyId: id.optional(), route: routeSchema.optional() }).parse(req.body)
+  const { center, journeyId, route, fix } = z.object({ center: point, journeyId: id.optional(), route: routeSchema.optional(),
+    fix: point.extend({ accuracy: z.number().min(0).max(20) }).optional(),
+  }).parse(req.body)
   const userId = res.locals.user.id as string
   const vehicle = journeyId && await prisma.journey.findFirst({
     where: { id: journeyId, activeUserId: userId },
     select: { vehicle: { select: { type: true } } },
   })
+  if (vehicle && journeyId && fix && distanceMeters(center, fix) <= 100) {
+    rememberDriverFix(userId, journeyId, { latitude: fix.latitude, longitude: fix.longitude })
+  }
   const validRoute = route && distanceMeters(center, route.departure) <= 100 ? route : undefined
   res.json(nearbyDrivers(userId, center, vehicle ? vehicle.vehicle.type : undefined, Date.now(), validRoute, undefined, res.locals.user))
 })
@@ -515,6 +533,41 @@ app.post('/api/journeys/:id/legs/:index/review', async (req, res) => {
   }, { isolationLevel: 'Serializable' })
   if (result === 'missing') return res.status(404).json({ error: 'Trecho indisponível.' })
   if (result === 'capacity') return res.status(422).json({ error: 'Na moto, registre um passageiro por trecho.' })
+  res.json({ ok: true })
+})
+app.get('/api/journeys/:id/boarding-suggestions', async (req, res) => {
+  const journeyId = id.parse(req.params.id)
+  const suggestions = await prisma.boardingSuggestion.findMany({
+    where: { journeyId, journey: { activeUserId: res.locals.user.id }, status: { in: ['pending', 'confirmed'] } },
+    orderBy: { detectedAt: 'desc' }, take: 20, select: { id: true, detectedAt: true, status: true },
+  })
+  res.json(suggestions)
+})
+app.post('/api/journeys/:id/boarding-suggestions/:suggestionId', async (req, res) => {
+  const journeyId = id.parse(req.params.id)
+  const suggestionId = z.string().uuid().parse(req.params.suggestionId)
+  const { action } = z.object({ action: z.enum(['confirm', 'dismiss', 'undo']) }).parse(req.body)
+  const result = await prisma.$transaction(async tx => {
+    const journey = await tx.journey.findFirst({ where: { id: journeyId, activeUserId: res.locals.user.id } })
+    const suggestion = await tx.boardingSuggestion.findFirst({ where: { id: suggestionId, journeyId } })
+    if (!journey || !suggestion) return false
+    const required = action === 'undo' ? 'confirmed' : 'pending'
+    if (suggestion.status !== required) return true
+    const changed = await tx.boardingSuggestion.updateMany({ where: { id: suggestionId, status: required },
+      data: { status: action === 'confirm' ? 'confirmed' : 'dismissed' } })
+    if (!changed.count) return true
+    if (action === 'confirm') {
+      const boarding = await tx.boarding.create({ data: {
+        journeyId, count: 1, fare: journey.fare, legIndex: journey.pointB ? journey.arrivals : null,
+        leg: (journey.pointB ? journey.arrivals % 2 : journey.turnedAt) ? 'return' : 'outbound',
+      } })
+      await tx.boardingSuggestion.update({ where: { id: suggestionId }, data: { boardingId: boarding.id } })
+    } else if (action === 'undo' && suggestion.boardingId) {
+      await tx.boarding.deleteMany({ where: { id: suggestion.boardingId, journeyId } })
+    }
+    return true
+  }, { isolationLevel: 'Serializable' })
+  if (!result) return res.status(404).json({ error: 'Sugestão indisponível.' })
   res.json({ ok: true })
 })
 app.post('/api/journeys/:id/boardings', async (req, res) => {

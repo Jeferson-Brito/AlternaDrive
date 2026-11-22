@@ -141,7 +141,9 @@ async function shareBackgroundLocation(locations: Location.LocationObject[]) {
   await refreshDriverPresence(token, {
     latitude: Math.round(latest.coords.latitude * 1000) / 1000,
     longitude: Math.round(latest.coords.longitude * 1000) / 1000,
-  }, tracking.id)
+  }, tracking.id, undefined, latest.coords.accuracy == null ? undefined : {
+    latitude: latest.coords.latitude, longitude: latest.coords.longitude, accuracy: latest.coords.accuracy,
+  })
 }
 
 if (!isExpoGo) TaskManager.defineTask<{ locations: Location.LocationObject[] }>(taskName, async ({ data, error }) => {
