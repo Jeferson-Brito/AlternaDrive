@@ -66,6 +66,7 @@ model Journey {
   pointA Json?
   pointB Json?
   arrivals Int @default(0)
+  approachingStart Boolean @default(false)
   turnKm         Float?
   endKm          Float?
   efficiency     Float

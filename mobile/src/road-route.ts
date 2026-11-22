@@ -23,9 +23,12 @@ export function useRoadRoute({ a, b, active, position, token }: RouteInputs) {
   const fix = useRef(position)
   fix.current = position
   const returning = (active?.arrivals ?? 0) % 2 === 1
-  const from = returning ? b : a
-  const to = returning ? a : b
-  const routeKey = [active?.id, active?.arrivals, from?.latitude, from?.longitude, to?.latitude, to?.longitude].join(':')
+  const approaching = !!active?.approachingStart
+  const approachOrigin = active?.startLatitude != null && active.startLongitude != null
+    ? { latitude: active.startLatitude, longitude: active.startLongitude } : null
+  const from = approaching ? approachOrigin : returning ? b : a
+  const to = approaching || returning ? a : b
+  const routeKey = [active?.id, active?.arrivals, approaching, from?.latitude, from?.longitude, to?.latitude, to?.longitude].join(':')
   const road = loaded?.key === routeKey ? loaded.road : undefined
   const current = position?.coords
   const progress = useMemo(() => road && current ? routeProgress(current, road.geometry.coordinates) : null, [current, road])
@@ -42,7 +45,7 @@ export function useRoadRoute({ a, b, active, position, token }: RouteInputs) {
     const useRoad = (road: Road) => setLoaded({ key: routeKey, road })
     async function load() {
       const far = distanceMeters(start, from!) > 150
-      const habitual = isReroute || !token ? null : await api<{ checkpoints: Point[] | null; manual?: Point[] }>(
+      const habitual = isReroute || approaching || !token ? null : await api<{ checkpoints: Point[] | null; manual?: Point[] }>(
         'routes/habitual', { from, to }, token, abort.signal).catch(() => null)
       if (abort.signal.aborted) return
       if (habitual?.manual) {

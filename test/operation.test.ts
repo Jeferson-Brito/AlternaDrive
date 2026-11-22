@@ -9,6 +9,7 @@ import { remainingRoad, routeProgress, travelBearing, type RoadLine } from '../s
 import { navigationEstimate, workDuration } from '../src/journey-time'
 import { formatNumberDigits, parseNumber } from '../src/localized-number'
 import { nextManeuver } from '../src/navigation-steps'
+import { accumulateDistance, emptyTrack } from '../src/gps-distance'
 import { dailyProfit, nextReportingDay } from '../server/finance'
 
 test('isolates accounts and computes the net result of a round trip', async () => {
@@ -280,6 +281,26 @@ test('isolates accounts and computes the net result of a round trip', async () =
       await call('admin/routes', { points, name: 'Rota de teste' }, signedIn, 201)
       const route = await call('routes/habitual', { from: points[0], to: points[1] }, signedIn)
       assert.deepEqual(route.result.manual, points)
+      const driver = await call('login', { email: 'second@example.test', password: 'new-test-password' })
+      assert(driver.cookie)
+      await call('settings/journey', {
+        defaultOrigin: 'Ponto A', defaultDestination: 'Ponto B', defaultFare: 750, defaultPointA: points[0], defaultPointB: points[1],
+      }, driver.cookie)
+      const gpsVehicle = (await call('vehicles', { name: 'Carro GPS', fuel: 'Gasolina', tank: 50, efficiency: 10, capacity: 4 }, driver.cookie, 201)).result
+      const approachJourney = (await call('journeys', {
+        vehicleId: gpsVehicle.id, startKm: 30, fuelPrice: 600, approachFrom: { latitude: -7.140, longitude: -34.881 },
+      }, driver.cookie, 201)).result
+      assert.equal(approachJourney.approachingStart, true)
+      const tripPath = 'journeys/' + approachJourney.id
+      const arrivesAt = async (index: number) => (await call(tripPath + '/arrival', {
+        ...points[index], accuracy: 7, arrivals: 0,
+      }, driver.cookie)).result
+      assert.deepEqual(await arrivesAt(1), { arrivals: 0, approachingStart: true })
+      assert.deepEqual(await arrivesAt(0), { arrivals: 0, approachingStart: false })
+      assert.deepEqual(await arrivesAt(1), { arrivals: 1, approachingStart: false })
+      const measuredClosing = (await call(tripPath + '/finish', { km: 132 }, driver.cookie)).result.closing
+      assert.equal(measuredClosing.distance, 102)
+      assert.equal(measuredClosing.fuel, 6120)
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
       await prisma.$disconnect()
@@ -367,4 +388,18 @@ test('draws only the untraveled geometry after projecting the vehicle onto a roa
   assert.deepEqual(remainingRoad(road, middle)?.coordinates, [[.01, .005], [.01, .01]])
   const finish = routeProgress({ latitude: .01, longitude: .01 }, road.coordinates)
   assert.equal(remainingRoad(road, finish), undefined)
+})
+
+
+test('counts real GPS movement only once and ignores jitter and implausible jumps', () => {
+  const first = { latitude: 0, longitude: 0, timestamp: 1000, accuracy: 5, speed: 0 }
+  const start = accumulateDistance(emptyTrack, first)
+  const stopped = accumulateDistance(start, { ...first, timestamp: 2000, longitude: .000025 })
+  assert.equal(stopped.meters, 0)
+  const moving = { ...first, timestamp: 7000, longitude: .001, speed: 20 }
+  const trip = accumulateDistance(stopped, moving)
+  assert(trip.meters > 100 && trip.meters < 120)
+  assert.equal(accumulateDistance(trip, moving), trip)
+  assert.equal(accumulateDistance(trip, { ...moving, timestamp: 8000, accuracy: 60 }), trip)
+  assert.equal(accumulateDistance(trip, { ...moving, timestamp: 8000, longitude: 1 }).meters, trip.meters)
 })

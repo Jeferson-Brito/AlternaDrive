@@ -5,7 +5,8 @@ export type { Point }
 export type Place = Point & { label: string }
 export type Boarding = { id: string; count: number; fare: number; createdAt: string }
 export type Journey = {
-  id: string; vehicleId: string; origin: string; destination: string; startKm: number; startedAt: string; arrivals: number
+  id: string; vehicleId: string; origin: string; destination: string; startKm: number; startedAt: string; arrivals: number; approachingStart?: boolean
+  startLatitude?: number | null; startLongitude?: number | null; turnKm?: number | null
   boardings: Boarding[]; pointA: Point | null; pointB: Point | null; fare: number; vehicle: { name: string; type: string }
 }
 export type Summary = { period: string; passengers: number; revenue: number; profit: number | null }

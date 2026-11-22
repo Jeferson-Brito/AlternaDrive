@@ -1,6 +1,6 @@
 import { Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { AccessibilityInfo, Animated, Alert, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Text } from './src/type'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
@@ -21,7 +21,8 @@ import { Report } from './src/Report'
 import { useNearbyDrivers } from './src/nearby-drivers'
 import { useRoadRoute } from './src/road-route'
 import { type Boarding, type Closing, type Dashboard, type Place, money, numeric } from './src/model'
-import { onArrival, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
+import { measuredJourneyKm, onArrival, prepareTracking, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
+import { arrivalRadius, distanceMeters } from '../src/arrival'
 import { workDuration } from '../src/journey-time'
 
 type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'password' | 'editVehicle' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
@@ -73,6 +74,8 @@ function Operation() {
   const [position, setPosition] = useState<Location.LocationObject | null>(null)
   const [gpsStatus, setGpsStatus] = useState('')
   const [vehicleId, setVehicleId] = useState('')
+  const [finishEdited, setFinishEdited] = useState(false)
+  const [gpsKm, setGpsKm] = useState<number | null>(null)
   const [first, setFirst] = useState('')
   const [second, setSecond] = useState('')
   const [pointA, setPointA] = useState<Place | null>(null)
@@ -168,7 +171,9 @@ function Operation() {
     let watcher: Location.LocationSubscription | undefined
     let cancelled = false
     void Location.getForegroundPermissionsAsync().then(async permission => {
-      if (!permission.granted || cancelled) return
+      if (!permission.granted || cancelled || !active) return
+      await prepareTracking(active)
+      if (cancelled) return
       watcher = await Location.watchPositionAsync({
         accuracy: Location.Accuracy.High, distanceInterval: 3, timeInterval: 1000,
       }, location => {
@@ -180,6 +185,23 @@ function Operation() {
     }).catch(() => { if (!cancelled) setGpsStatus('GPS indisponível.') })
     return () => { cancelled = true; watcher?.remove() }
   }, [activeId, gpsStatus])
+
+  useEffect(() => {
+    if (panel !== 'finish' || !activeId || active?.startKm == null) return
+    let disposed = false
+    const startKm = active.startKm
+    const refresh = () => void measuredJourneyKm(activeId).then(km => {
+      if (disposed) return
+      setGpsKm(km)
+      if (!finishEdited && km !== null) {
+        const finalKm = Math.max(active.turnKm ?? startKm, Math.round((startKm + km) * 100) / 100)
+        setFirst(finalKm.toLocaleString('pt-BR', { maximumFractionDigits: 2 }))
+      }
+    }).catch(() => undefined)
+    refresh()
+    const timer = setInterval(refresh, 1200)
+    return () => { disposed = true; clearInterval(timer) }
+  }, [panel, activeId, active?.startKm, active?.turnKm, finishEdited])
 
   async function enableTracking(journey: NonNullable<Dashboard['active']>) {
     try {
@@ -206,6 +228,8 @@ function Operation() {
     setError('')
     setFirst(next === 'route' && data?.defaults.defaultFare ? (data.defaults.defaultFare / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '')
     setSecond('')
+    setFinishEdited(false)
+    setGpsKm(null)
     setUseCurrent(false)
     if (next === 'route' && data) {
       const defaults = data.defaults
@@ -225,12 +249,44 @@ function Operation() {
   async function begin() {
     if (!token) return
     let currentLocation
-    if (useCurrent) {
-      if (!(await Location.requestForegroundPermissionsAsync()).granted) throw new Error('Autorize o GPS para usar a localização atual.')
-      const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
-      currentLocation = { latitude: coords.latitude, longitude: coords.longitude, address: 'Localização atual' }
+    let approachFrom
+    let fix: Location.LocationObject | null = null
+    const a = data?.defaults.defaultPointA
+    const b = data?.defaults.defaultPointB
+    const permission = await Location.requestForegroundPermissionsAsync()
+    if (permission.granted) {
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      try {
+        fix = await Location.getLastKnownPositionAsync({ maxAge: 10000, requiredAccuracy: 40 })
+        if (!fix) {
+          fix = await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+            new Promise<null>(resolve => { timeout = setTimeout(() => resolve(null), 5500) }),
+          ])
+        }
+      } catch { fix = null }
+      finally { clearTimeout(timeout) }
     }
-    await api('journeys', { vehicleId, startKm: numeric(first), currentLocation }, token)
+    if (useCurrent) {
+      if (!fix || (fix.coords.accuracy ?? Infinity) > 50) throw new Error('Aguarde um sinal de GPS mais preciso para usar a localização atual.')
+      currentLocation = { latitude: fix.coords.latitude, longitude: fix.coords.longitude, address: 'Localização atual' }
+    } else if (fix && a && b && (fix.coords.accuracy ?? Infinity) <= 50 &&
+        distanceMeters(fix.coords, a) > arrivalRadius(a, b)) {
+      const choice = await new Promise<'approach' | 'direct' | 'cancel'>(resolve => {
+        Alert.alert('Ir até o ponto inicial?', 'Você está fora do Ponto A. Ao chegar lá, o mapa muda automaticamente para o Ponto B.', [
+          { text: 'Cancelar', style: 'cancel', onPress: () => resolve('cancel') },
+          { text: 'Iniciar direto', onPress: () => resolve('direct') },
+          { text: 'Ir ao Ponto A', onPress: () => resolve('approach') },
+        ], { cancelable: true, onDismiss: () => resolve('cancel') })
+      })
+      if (choice === 'cancel') return
+      if (choice === 'approach') approachFrom = { latitude: fix.coords.latitude, longitude: fix.coords.longitude }
+    }
+    const created = await api<NonNullable<Dashboard['active']>>('journeys', {
+      vehicleId, startKm: numeric(first), currentLocation, approachFrom,
+    }, token)
+    if (permission.granted) await prepareTracking(created)
+    if (fix) setPosition(fix)
     show(null)
     const dashboard = await reload(token)
     if (dashboard.active) await enableTracking(dashboard.active)
@@ -284,7 +340,7 @@ function Operation() {
   </View>
 
   const stats = data.summaries.find(item => item.period === 'day')
-  const destination = active ? (active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
+  const destination = active ? (active.approachingStart || active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
   const dayRevenue = money((stats?.revenue ?? 0) + pendingBoarding * (active?.fare ?? 0))
   const dayBoardings = (stats?.passengers ?? 0) + pendingBoarding
   const vehicles = data.vehicles.map(vehicle => <Button key={vehicle.id} secondary={vehicle.id !== vehicleId}
@@ -331,12 +387,13 @@ function Operation() {
             <View style={styles.grip} />
             <View style={styles.destinationRow}>
               <View style={styles.destination}>
-                <Text style={styles.label}>{'Próximo destino · Ponto ' + (active.arrivals % 2 ? 'A' : 'B')}</Text>
+                <Text style={styles.label}>{'Próximo destino · Ponto ' + (active.approachingStart || active.arrivals % 2 ? 'A' : 'B')}</Text>
                 <Text numberOfLines={1} style={ui.muted}>{destination}</Text>
               </View>
               <Icon name={expanded ? 'down' : 'up'} />
             </View>
           </Pressable>
+          {active.approachingStart && <Text style={ui.muted}>A caminho do ponto inicial</Text>}
           {route.estimate && <View style={styles.estimate}>
             <Text style={styles.estimateText}>{Math.ceil(route.estimate.seconds / 60)} min</Text>
             <Text style={styles.estimateText}>às {new Date(Date.now() + route.estimate.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
@@ -543,8 +600,19 @@ function Operation() {
                 {submit('Registrar grupo', () => save('journeys/' + active?.id + '/boardings', { count: numeric(first) }), !Number.isInteger(numeric(first)) || !minPrice(first))}
               </>}
               {panel === 'finish' && <>
-                <NumberField mode="odometer" label="Hodômetro final (km)" value={first} onChange={setFirst} />
-                {submit('Confirmar encerramento', finish, !validOdometer || odometerValue < (active?.startKm ?? 0))}
+                <View style={styles.routePreview}>
+                  <Text style={ui.muted}>Distância registrada pelo GPS</Text>
+                  <Text style={styles.label}>{gpsKm === null ? 'GPS sem distância suficiente para estimar'
+                    : gpsKm.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' km'}</Text>
+                </View>
+                <NumberField mode="odometer" label="Hodômetro final (km)" value={first}
+                  onChange={value => { setFinishEdited(true); setFirst(value) }} />
+                <Text style={ui.muted}>{gpsKm === null ? 'Informe a leitura do painel para encerrar.'
+                  : 'Confira a leitura sugerida e corrija se necessário.'}</Text>
+                {validOdometer && odometerValue >= (active?.startKm ?? 0) && <Text style={styles.label}>
+                  Distância para o relatório · {(odometerValue - (active?.startKm ?? 0)).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} km
+                </Text>}
+                {submit('Confirmar encerramento', finish, !validOdometer || odometerValue < (active?.turnKm ?? active?.startKm ?? 0))}
               </>}
               {panel === 'fuel' && <>
                 <NumberField mode="money" label="Total pago (R$)" value={first} onChange={setFirst} />

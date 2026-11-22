@@ -13,7 +13,7 @@ import { nearbyDrivers, removeDriver } from './driver-presence'
 import { closestServedStop, findStops, stopDemand, updateWaiting } from './passenger-presence'
 import { carColors } from '../src/car-colors'
 import { findAddresses } from '../src/address-search'
-import { distanceMeters, isArrival } from '../src/arrival'
+import { arrivalRadius, distanceMeters, isArrival } from '../src/arrival'
 import { habitualRoute, routeCheckpoints } from '../src/route-geometry'
 
 const prisma = new PrismaClient()
@@ -371,10 +371,10 @@ app.post('/api/settings/journey', async (req, res) => {
   res.json(await prisma.user.update({ where: { id: res.locals.user.id }, data, select: journeyDefaults }))
 })
 app.post('/api/journeys', async (req, res) => {
-  const { fuelPrice, currentLocation, origin, destination, fare, ...data } = z.object({
+  const { fuelPrice, currentLocation, approachFrom, origin, destination, fare, ...data } = z.object({
     vehicleId: id, origin: address.optional(), destination: address.optional(), fare: cents.optional(),
     startKm: odometer, fuelPrice: cents.optional(),
-    currentLocation: point.extend({ address }).optional(),
+    currentLocation: point.extend({ address }).optional(), approachFrom: point.optional(),
   }).parse(req.body)
   const userId = res.locals.user.id as string
   const [vehicle, defaults, latestFuel] = await Promise.all([
@@ -397,13 +397,16 @@ app.post('/api/journeys', async (req, res) => {
   if (pointA && pointB && distanceMeters(pointA, pointB) < 60) {
     return res.status(422).json({ error: 'A origem e o destino precisam estar separados por pelo menos 60 metros.' })
   }
+  const approachingStart = !!(!currentLocation && approachFrom && pointA && pointB &&
+    distanceMeters(approachFrom, pointA) > arrivalRadius(pointA, pointB))
   const savedFuelPrice = latestFuel?.fuelUnitPrice ?? (latestFuel?.liters
     ? Math.max(1, Math.round(latestFuel.amount / latestFuel.liters)) : vehicle.referenceFuelPrice ?? 0)
   const journey = await prisma.journey.create({
     data: {
       ...data, userId, activeUserId: userId, efficiency: vehicle.efficiency, outboundFuelPrice: fuelPrice ?? savedFuelPrice,
       origin: journeyOrigin, destination: journeyDestination, fare: journeyFare,
-      startLatitude: currentLocation?.latitude, startLongitude: currentLocation?.longitude,
+      startLatitude: (currentLocation ?? approachFrom)?.latitude, startLongitude: (currentLocation ?? approachFrom)?.longitude,
+      approachingStart,
       pointA, pointB,
     },
   })
@@ -447,18 +450,25 @@ app.post('/api/journeys/:id/arrival', async (req, res) => {
   if (!journey) return res.status(404).json({ error: 'Jornada ativa indisponível.' })
   const a = point.safeParse(journey.pointA).data
   const b = point.safeParse(journey.pointB).data
+  if (journey.approachingStart) {
+    if (a && b && isArrival(a, b, 1, position)) {
+      await prisma.journey.updateMany({ where: { ...where, approachingStart: true }, data: { approachingStart: false } })
+      return res.json({ arrivals: journey.arrivals, approachingStart: false })
+    }
+    return res.json({ arrivals: journey.arrivals, approachingStart: true })
+  }
   if (arrivals !== journey.arrivals || !a || !b || !isArrival(a, b, arrivals, position)) {
-    return res.json({ arrivals: journey.arrivals })
+    return res.json({ arrivals: journey.arrivals, approachingStart: false })
   }
   const [from, to] = arrivals % 2 ? [b, a] : [a, b]
   const fixes = trace ? [...trace, position] : []
   const checkpoints = routeCheckpoints(fixes, from, to)
-  const distanceKm = checkpoints.length
+  const distanceKm = routeKm ?? (checkpoints.length
     ? fixes.slice(1).reduce((sum, fix, index) => sum + distanceMeters(fixes[index], fix), 0) / 1000
-    : routeKm
+    : undefined)
   const result = await prisma.$transaction(async tx => {
     const updated = await tx.journey.updateMany({
-      where: { ...where, arrivals }, data: { arrivals: { increment: 1 } },
+      where: { ...where, arrivals, approachingStart: false }, data: { arrivals: { increment: 1 } },
     })
     if (updated.count) {
       const boarded = await tx.boarding.findFirst({
@@ -477,9 +487,9 @@ app.post('/api/journeys/:id/arrival', async (req, res) => {
     }
     return updated
   })
-  if (result.count) return res.json({ arrivals: arrivals + 1 })
+  if (result.count) return res.json({ arrivals: arrivals + 1, approachingStart: false })
   const latest = await prisma.journey.findFirst({ where, select: { arrivals: true } })
-  res.json({ arrivals: latest?.arrivals ?? arrivals })
+  res.json({ arrivals: latest?.arrivals ?? arrivals, approachingStart: false })
 })
 app.post('/api/journeys/:id/legs/:index/review', async (req, res) => {
   const index = z.coerce.number().int().min(0).parse(req.params.index)
