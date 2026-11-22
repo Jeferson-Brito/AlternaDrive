@@ -31,7 +31,7 @@ function NativeRouteHighlight({ road, moving }: { road: RoadLine; moving: boolea
   </GeoJSONSource>)}</>
 }
 
-export function JourneyMap({ a, b, active, route, following, onExplore, drivers, demand = [], passengerCenter, carColor, waitingStop, drawPoint, drawRevision, routeEditor }: RouteView) {
+export function JourneyMap({ a, b, active, route, following, onExplore, drivers, demand = [], passengerCenter, carColor, ownFirstName, waitingStop, drawPoint, drawRevision, routeEditor }: RouteView) {
   const camera = useRef<CameraRef>(null)
   const driverName = useDriverName()
   const map = useRef<MapRef>(null)
@@ -91,8 +91,11 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
         </View>
       </ViewAnnotation>)}
-      {active && current && <ViewAnnotation id="driver" lngLat={coords(current)}>
-        <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
+      {active && current && <ViewAnnotation id="driver" lngLat={coords(current)} onPress={() => driverName.show('own')}>
+        <View style={{ alignItems: 'center' }}>
+          {driverName.selected === 'own' && !!ownFirstName && <Text style={styles.driverName} numberOfLines={1}>{ownFirstName}</Text>}
+          <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
+        </View>
       </ViewAnnotation>}
     </Map>
     {drawPoint && <MapPencil key={drawRevision} onPoint={drawPoint} locate={async (x, y) => {

@@ -396,7 +396,8 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
 
   return <View style={styles.root}>
     <JourneyMap a={routeA} b={routeB} active={active ?? null} route={route}
-      following={following} onExplore={() => setFollowing(false)} drivers={drivers} demand={demand} carColor={data.user.carColor} />
+      following={following} onExplore={() => setFollowing(false)} drivers={drivers} demand={demand} carColor={data.user.carColor}
+      ownFirstName={data.user.name.trim().split(/\s+/)[0]} />
     <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
       {active ? <View style={styles.stats}>
         <Metric label="Embarques" value={dayBoardings} dark />

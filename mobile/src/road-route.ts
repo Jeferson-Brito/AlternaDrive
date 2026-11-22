@@ -111,6 +111,7 @@ export type RouteView = Pick<RouteInputs, 'a' | 'b' | 'active'> & {
   drawRevision?: number
   routeEditor?: boolean
   carColor?: string | null
+  ownFirstName?: string
   passengerCenter?: Point
   waitingStop?: Omit<StopDemand, 'count'>
 }

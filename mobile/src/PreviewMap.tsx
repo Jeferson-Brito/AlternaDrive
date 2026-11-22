@@ -42,7 +42,7 @@ function PreviewRouteHighlight({ road }: { road: RoadLine }) {
     strokeColor={band.color} strokeWidth={band.width} lineCap="round" lineJoin="round" zIndex={3 + index} />)}</>
 }
 
-export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, waitingStop, drawPoint, drawRevision, routeEditor, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
+export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, ownFirstName, waitingStop, drawPoint, drawRevision, routeEditor, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
   const driverName = useDriverName()
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
@@ -85,8 +85,11 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
       </View>
     </Marker>)}
-    {active && current && <Marker coordinate={current} title="Seu veículo" anchor={{ x: .5, y: .5 }}>
-      <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
+    {active && current && <Marker coordinate={current} onPress={() => driverName.show('own')} anchor={{ x: .5, y: .5 }}>
+      <View style={{ alignItems: 'center' }}>
+          {driverName.selected === 'own' && !!ownFirstName && <Text style={styles.driverName} numberOfLines={1}>{ownFirstName}</Text>}
+          <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
+        </View>
     </Marker>}
   </MapView>
     {drawPoint && <MapPencil key={drawRevision} onPoint={drawPoint} locate={async (x, y) =>
