@@ -12,6 +12,7 @@ import { Button, Field, NumberField, ui } from './src/controls'
 import { JourneyMap, LoginMap } from './src/AppMap'
 import { isExpoGo } from './src/environment'
 import { VehicleForm } from './src/VehicleForm'
+import { Startup } from './src/Startup'
 import { StartJourneyForm } from './src/StartJourneyForm'
 import { RouteForm } from './src/RouteForm'
 import { Icon, IconButton, MenuRow, Metric, Shortcut } from './src/operation-ui'
@@ -32,31 +33,6 @@ if (!isExpoGo) {
   SplashScreen.setOptions({ fade: true, duration: 220 })
 }
 
-function Startup() {
-  const progress = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    let alive = true
-    let animation: Animated.CompositeAnimation | undefined
-    void AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
-      if (!alive || reduced) return
-      animation = Animated.loop(Animated.timing(progress, { toValue: 1, duration: 1250, useNativeDriver: true }))
-      animation.start()
-    }).catch(() => undefined)
-    return () => { alive = false; animation?.stop() }
-  }, [progress])
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [-36, 84] })
-  return <View style={styles.startup} accessibilityLabel="Abrindo AlternaDrive">
-    <StatusBar style="dark" />
-    <View style={styles.startupCenter}>
-      <Image accessibilityIgnoresInvertColors source={require('./assets/alternadrive.png')} style={styles.startupIcon} />
-      <Text style={styles.startupTitle}>AlternaDrive</Text>
-      <View style={styles.startupTrack}>
-        <Animated.View style={[styles.startupProgress, { transform: [{ translateX }] }]} />
-      </View>
-    </View>
-  </View>
-}
-
 type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'password' | 'editVehicle' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
   closing: 'Jornada finalizada', report: 'Lucro por dia', menu: 'Menu da operação', profile: 'Perfil do motorista', password: 'Alterar senha', editVehicle: 'Editar veículo', route: 'Percurso e tarifa', vehicle: 'Cadastrar veículo', start: 'Iniciar jornada',
@@ -70,7 +46,7 @@ function Brand() {
   </View>
 }
 
-function Operation() {
+function Operation({ onStartupReady }: { onStartupReady: () => void }) {
   const { bottom } = useSafeAreaInsets()
   const [token, setToken] = useState<string | null>(null)
   const [data, setData] = useState<Dashboard | null>(null)
@@ -348,12 +324,16 @@ function Operation() {
     await reload(token)
   }
 
+  useEffect(() => {
+    if (ready && (!token || data || error)) onStartupReady()
+  }, [ready, token, data, error, onStartupReady])
+
   const secureError = !!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
   if (adminOpen && token && data?.user.isAdmin) return <Admin token={token} center={routeA ?? undefined} close={() => setAdminOpen(false)} />
 
   if (passenger) return <Passenger close={() => setPassenger(false)} />
 
-  if (!ready || (token && !data && !error)) return <Startup />
+  if (!ready || (token && !data && !error)) return <View style={styles.appSurface} />
 
   if (!token || !data) return <View style={styles.root}>
     <LoginMap bottomInset={bottom} />
@@ -687,26 +667,29 @@ function Operation() {
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({ Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold })
-  const ready = fontsLoaded || !!fontError
+  const [minimumElapsed, setMinimumElapsed] = useState(false)
+  const [startupReady, setStartupReady] = useState(false)
+  const markReady = useCallback(() => setStartupReady(true), [])
   useEffect(() => {
-    if (ready && !isExpoGo) void SplashScreen.hideAsync().catch(() => undefined)
-  }, [ready])
+    if (!isExpoGo) void SplashScreen.hideAsync().catch(() => undefined)
+    const timer = setTimeout(() => setMinimumElapsed(true), 3000)
+    return () => clearTimeout(timer)
+  }, [])
+  const showingStartup = !minimumElapsed || !startupReady
   return <SafeAreaProvider>
     <View style={styles.appSurface}>
       <StatusBar style="dark" />
-      {ready ? <Operation /> : <Startup />}
+      <View style={styles.appSurface} importantForAccessibility={showingStartup ? 'no-hide-descendants' : 'auto'}
+        pointerEvents={showingStartup ? 'none' : 'auto'}>
+        {(fontsLoaded || fontError) && <Operation onStartupReady={markReady} />}
+      </View>
+      {showingStartup && <Startup />}
     </View>
   </SafeAreaProvider>
 }
 
 const styles = StyleSheet.create({
   appSurface: { flex: 1, backgroundColor: '#f4f9f6' },
-  startup: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f9f6' },
-  startupCenter: { alignItems: 'center', height: 92, width: '100%' },
-  startupIcon: { width: 92, height: 92, borderRadius: 24 },
-  startupTitle: { position: 'absolute', top: 107, color: '#163c32', fontSize: 30, fontWeight: '800', letterSpacing: -.7 },
-  startupTrack: { position: 'absolute', top: 161, width: 84, height: 3, borderRadius: 3, overflow: 'hidden', backgroundColor: '#d5e8df' },
-  startupProgress: { width: 36, height: 3, borderRadius: 3, backgroundColor: '#2e846e' },
   startFooter: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#dceae3' },
   loginLink: { alignItems: 'center', justifyContent: 'center', minHeight: 42 },
   linkText: { color: '#0b5a48', fontWeight: '800', fontSize: 13 },
