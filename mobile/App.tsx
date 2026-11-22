@@ -1,7 +1,7 @@
 import * as SplashScreen from 'expo-splash-screen'
 import { Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, ActivityIndicator, Animated, Alert, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AccessibilityInfo, Animated, Alert, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Text } from './src/type'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
@@ -12,6 +12,7 @@ import { Button, Field, NumberField, ui } from './src/controls'
 import { JourneyMap, LoginMap } from './src/AppMap'
 import { isExpoGo } from './src/environment'
 import { VehicleForm } from './src/VehicleForm'
+import { StartJourneyForm } from './src/StartJourneyForm'
 import { RouteForm } from './src/RouteForm'
 import { Icon, IconButton, MenuRow, Metric, Shortcut } from './src/operation-ui'
 import { Passenger, usePassengerDemand } from './src/Passenger'
@@ -32,11 +33,27 @@ if (!isExpoGo) {
 }
 
 function Startup() {
+  const progress = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    let alive = true
+    let animation: Animated.CompositeAnimation | undefined
+    void AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
+      if (!alive || reduced) return
+      animation = Animated.loop(Animated.timing(progress, { toValue: 1, duration: 1250, useNativeDriver: true }))
+      animation.start()
+    }).catch(() => undefined)
+    return () => { alive = false; animation?.stop() }
+  }, [progress])
+  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [-36, 84] })
   return <View style={styles.startup} accessibilityLabel="Abrindo AlternaDrive">
-    <StatusBar style="light" />
-    <Image accessibilityIgnoresInvertColors source={require('./assets/alternadrive.png')} style={styles.startupIcon} />
-    <Text style={styles.startupTitle}>AlternaDrive</Text>
-    <ActivityIndicator color="#97efd1" size="small" style={styles.startupProgress} />
+    <StatusBar style="dark" />
+    <View style={styles.startupCenter}>
+      <Image accessibilityIgnoresInvertColors source={require('./assets/alternadrive.png')} style={styles.startupIcon} />
+      <Text style={styles.startupTitle}>AlternaDrive</Text>
+      <View style={styles.startupTrack}>
+        <Animated.View style={[styles.startupProgress, { transform: [{ translateX }] }]} />
+      </View>
+    </View>
   </View>
 }
 
@@ -83,6 +100,15 @@ function Operation() {
   const actionsOpacity = useRef(new Animated.Value(1)).current
   const reduceMotion = useRef(false)
   const [expanded, setExpanded] = useState(false)
+  const journeyDrag = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_, gesture) =>
+      Math.abs(gesture.dy) > 9 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
+    onPanResponderRelease: (_, gesture) => {
+      if (Math.abs(gesture.dy) >= 28 || (Math.abs(gesture.dy) >= 12 && Math.abs(gesture.vy) >= .35)) {
+        setExpanded(gesture.dy < 0)
+      }
+    },
+  }), [])
   const [following, setFollowing] = useState(true)
   const [hiddenJourneyId, setHiddenJourneyId] = useState<string>()
   const [journeyClosing, setJourneyClosing] = useState<Closing>()
@@ -403,11 +429,11 @@ function Operation() {
       </View>}
       {active && !following ? <View style={styles.recenter}>
         <Button title="Recentralizar veículo" onPress={() => setFollowing(true)} />
-      </View> : <View style={active ? styles.card : styles.homeAction}>
+      </View> : <View style={active ? styles.card : styles.homeAction} {...(active ? journeyDrag.panHandlers : {})}>
         {!!error && !panel && secureError}
         {active ? <>
           <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Recolher ações' : 'Expandir ações'}
-            accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.drawer}>
+            accessibilityState={{ expanded }} onPress={() => setExpanded(value => !value)} style={styles.drawer}>
             <View style={styles.grip} />
             <View style={styles.destinationRow}>
               <View style={styles.destination}>
@@ -614,21 +640,10 @@ function Operation() {
                   show(null)
                 })} />}
               {panel === 'vehicle' && <VehicleForm busy={busy} save={vehicle => void run(() => save('vehicles', vehicle))} />}
-              {(panel === 'start' || panel === 'fuel') && <><Text style={styles.label}>Veículo</Text>{vehicles}</>}
-              {panel === 'start' && <>
-                <View style={styles.routePreview}>
-                  <Text style={ui.muted}>Ponto A · Origem</Text>
-                  <Text style={styles.label}>{data.defaults.defaultOrigin}</Text>
-                  <Text style={ui.muted}>Ponto B · Destino</Text>
-                  <Text style={styles.label}>{data.defaults.defaultDestination}</Text>
-                  <Text style={ui.muted}>Tarifa por passageiro · {money(data.defaults.defaultFare)}</Text>
-                </View>
-                <NumberField mode="odometer" label="Hodômetro inicial (km)" value={first} onChange={setFirst} />
-                <Text style={ui.muted}>Informe a quilometragem total exibida no painel.</Text>
-                <Button secondary={!useCurrent} title={useCurrent ? '✓ Usar localização atual' : 'Usar localização atual'} onPress={() => setUseCurrent(!useCurrent)} />
-                <Text style={ui.muted}>Durante a jornada, sua posição aproximada aparece no mapa. Você pode ocultá-la nos controles da jornada.</Text>
-                {submit('Iniciar jornada', begin, !vehicleId || !validOdometer)}
-              </>}
+              {panel === 'fuel' && <><Text style={styles.label}>Veículo</Text>{vehicles}</>}
+              {panel === 'start' && <StartJourneyForm defaults={data.defaults} vehicles={data.vehicles}
+                vehicleId={vehicleId} onVehicle={setVehicleId} odometer={first} onOdometer={setFirst}
+                useCurrent={useCurrent} onUseCurrent={setUseCurrent} busy={busy} />}
               {panel === 'group' && <>
                 <NumberField label="Número de passageiros" value={first} onChange={setFirst} />
                 {submit('Registrar grupo', () => save('journeys/' + active?.id + '/boardings', { count: numeric(first) }), !Number.isInteger(numeric(first)) || !minPrice(first))}
@@ -660,6 +675,9 @@ function Operation() {
                 {submit('Salvar despesa', () => save('entries', { kind: 'expense', label: first, amount: cents(second) }), !first.trim() || !minPrice(second))}
               </>}
             </ScrollView>
+            {panel === 'start' && <View style={styles.startFooter}>
+              {submit('Iniciar jornada', begin, !vehicleId || !validOdometer)}
+            </View>}
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -682,11 +700,14 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  appSurface: { flex: 1, backgroundColor: '#102f29' },
-  startup: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#102f29' },
+  appSurface: { flex: 1, backgroundColor: '#f4f9f6' },
+  startup: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f9f6' },
+  startupCenter: { alignItems: 'center', height: 92, width: '100%' },
   startupIcon: { width: 92, height: 92, borderRadius: 24 },
-  startupTitle: { color: '#fff', fontSize: 30, fontWeight: '800', marginTop: 15 },
-  startupProgress: { marginTop: 26 },
+  startupTitle: { position: 'absolute', top: 107, color: '#163c32', fontSize: 30, fontWeight: '800', letterSpacing: -.7 },
+  startupTrack: { position: 'absolute', top: 161, width: 84, height: 3, borderRadius: 3, overflow: 'hidden', backgroundColor: '#d5e8df' },
+  startupProgress: { width: 36, height: 3, borderRadius: 3, backgroundColor: '#2e846e' },
+  startFooter: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#dceae3' },
   loginLink: { alignItems: 'center', justifyContent: 'center', minHeight: 42 },
   linkText: { color: '#0b5a48', fontWeight: '800', fontSize: 13 },
   loginPassenger: { borderTopWidth: 1, borderTopColor: '#e2ece7', paddingTop: 6 },

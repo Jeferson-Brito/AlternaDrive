@@ -3,6 +3,7 @@ import { Text } from './type'
 import Svg, { Path } from 'react-native-svg'
 
 const shapes = {
+  check: 'm5 12 4 4L19 6',
   right: 'm9 6 6 6-6 6',
   profile: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   car: 'm4 11 2-5h12l2 5M5 17v2m14-2v2M7 14h1m8 0h1M4 11h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Z',
