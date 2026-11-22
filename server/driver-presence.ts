@@ -3,7 +3,8 @@ import { routeProgress, type Coordinates } from '../src/route-geometry'
 import { distanceMeters, type Point } from '../src/arrival'
 
 type DriverRoute = { coordinates: Coordinates[]; duration: number; departure: Point }
-type Driver = Point & { id: string; type: string; expiresAt: number; route?: DriverRoute }
+type DriverProfile = { name: string; carColor: string | null }
+type Driver = Point & { id: string; type: string; expiresAt: number; firstName?: string; carColor?: string | null; route?: DriverRoute }
 
 const online = new Map<string, Driver>()
 const ttl = 45_000
@@ -13,12 +14,13 @@ export function removeDriver(userId: string) {
   online.delete(userId)
 }
 
-export function nearbyDrivers(userId: string | null, center: Point, type?: string, now = Date.now(), route?: DriverRoute, stop?: Point) {
+export function nearbyDrivers(userId: string | null, center: Point, type?: string, now = Date.now(), route?: DriverRoute, stop?: Point, profile?: DriverProfile) {
   for (const [key, driver] of online) if (driver.expiresAt <= now) online.delete(key)
   if (type && userId) {
     const id = online.get(userId)?.id ?? randomUUID()
     online.set(userId, {
-      id, type, latitude: Math.round(center.latitude * 1000) / 1000,
+      id, type, firstName: profile?.name.trim().split(/\s+/)[0], carColor: profile?.carColor,
+      latitude: Math.round(center.latitude * 1000) / 1000,
       longitude: Math.round(center.longitude * 1000) / 1000, route, expiresAt: now + ttl,
     })
   }

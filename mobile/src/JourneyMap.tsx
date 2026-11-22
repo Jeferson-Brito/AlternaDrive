@@ -8,6 +8,7 @@ import type { RoadLine } from '../../src/route-geometry'
 import { useRouteHighlight } from './route-trail'
 import { StopMarker } from './StopMarker'
 import { MapPencil } from './MapPencil'
+import { useDriverName } from './use-driver-name'
 import { DriverMarker } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.
@@ -32,6 +33,7 @@ function NativeRouteHighlight({ road, moving }: { road: RoadLine; moving: boolea
 
 export function JourneyMap({ a, b, active, route, following, onExplore, drivers, demand = [], passengerCenter, carColor, waitingStop, drawPoint, drawRevision, routeEditor }: RouteView) {
   const camera = useRef<CameraRef>(null)
+  const driverName = useDriverName()
   const map = useRef<MapRef>(null)
   const { height } = useWindowDimensions()
   const [loaded, setLoaded] = useState(false)
@@ -82,9 +84,10 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
         <StopMarker count={stop.count} />
       </ViewAnnotation>)}
       {waitingStop && <ViewAnnotation id="passenger-stop" lngLat={coords(waitingStop)}><StopMarker count={1} /></ViewAnnotation>}
-      {drivers.map(driver => <ViewAnnotation key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)}>
+      {drivers.map(driver => <ViewAnnotation key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)} onPress={() => driverName.show(driver.id)}>
         <View style={{ alignItems: 'center' }}>
-          <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} />
+          {driverName.selected === driver.id && !!driver.firstName && <Text style={styles.driverName} numberOfLines={1}>{driver.firstName}</Text>}
+          <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} carColor={driver.carColor} />
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
         </View>
       </ViewAnnotation>)}
@@ -106,6 +109,8 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
 }
 
 const styles = StyleSheet.create({
+  driverName: { maxWidth: 120, color: '#164338', fontWeight: '800', fontSize: 12,
+    paddingHorizontal: 7, paddingVertical: 3, marginBottom: 2, borderRadius: 8, backgroundColor: '#fff' },
   arrival: { fontSize: 11, fontWeight: '800', color: '#0b5a48', backgroundColor: '#fff', padding: 3, borderRadius: 4 },
   pin: { backgroundColor: '#0b5a48', color: 'white', textAlign: 'center', borderRadius: 13, overflow: 'hidden', width: 26, height: 26, lineHeight: 26, fontWeight: '800' },
   status: { position: 'absolute', right: 14, top: 150, borderRadius: 12, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8, elevation: 3 },

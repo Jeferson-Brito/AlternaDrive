@@ -232,7 +232,7 @@ app.post('/api/drivers/nearby', rateLimit({
     select: { vehicle: { select: { type: true } } },
   })
   const validRoute = route && distanceMeters(center, route.departure) <= 100 ? route : undefined
-  res.json(nearbyDrivers(userId, center, vehicle ? vehicle.vehicle.type : undefined, Date.now(), validRoute))
+  res.json(nearbyDrivers(userId, center, vehicle ? vehicle.vehicle.type : undefined, Date.now(), validRoute, undefined, res.locals.user))
 })
 app.post('/api/passenger/demand', passengerLimit, (req, res) => {
   const center = point.parse(req.body)

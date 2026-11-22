@@ -4,7 +4,7 @@ import { refreshDriverPresence } from './driver-sharing'
 import type { RoadLine } from '../../src/route-geometry'
 import type { Point } from './model'
 
-export type NearbyDriver = Point & { id: string; type: string; arrivalSeconds?: number }
+export type NearbyDriver = Point & { id: string; type: string; firstName?: string; carColor?: string | null; arrivalSeconds?: number }
 const city = { latitude: -7.132, longitude: -34.871 }
 
 export function useNearbyDrivers(token: string | null, center: Point | null, position: Point | null, sharingJourney?: string, road?: { geometry: RoadLine; duration: number }) {

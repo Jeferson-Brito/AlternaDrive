@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, useWindowDimensions } from 'react-native'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Text } from './type'
 import MapView, { Marker, Polyline, type MapStyleElement } from 'react-native-maps'
 import { navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
@@ -7,6 +7,7 @@ import type { RoadLine } from '../../src/route-geometry'
 import { useRouteHighlight } from './route-trail'
 import { StopMarker } from './StopMarker'
 import { MapPencil } from './MapPencil'
+import { useDriverName } from './use-driver-name'
 import { DriverMarker } from './DriverMarker'
 
 const initialRegion = { latitude: -7.132, longitude: -34.871, latitudeDelta: .033, longitudeDelta: .030 }
@@ -42,6 +43,7 @@ function PreviewRouteHighlight({ road }: { road: RoadLine }) {
 }
 
 export function PreviewMap({ a, b, active, route, following = true, onExplore, drivers = [], demand = [], passengerCenter, carColor, waitingStop, drawPoint, drawRevision, routeEditor, decorative = false }: Partial<RouteView> & { decorative?: boolean }) {
+  const driverName = useDriverName()
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
   const [ready, setReady] = useState(false)
@@ -76,9 +78,12 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
       <StopMarker count={stop.count} />
     </Marker>)}
     {waitingStop && <Marker coordinate={waitingStop} title={waitingStop.name}><StopMarker count={1} /></Marker>}
-    {drivers.map(driver => <Marker key={driver.id} coordinate={driver} title="Motorista próximo" anchor={{ x: .5, y: .5 }}>
-      <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} />
+    {drivers.map(driver => <Marker key={driver.id} coordinate={driver} anchor={{ x: .5, y: .5 }} onPress={() => driverName.show(driver.id)}>
+      <View style={styles.driverMarker}>
+      {driverName.selected === driver.id && !!driver.firstName && <Text style={styles.driverName} numberOfLines={1}>{driver.firstName}</Text>}
+          <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} carColor={driver.carColor} />
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
+      </View>
     </Marker>)}
     {active && current && <Marker coordinate={current} title="Seu veículo" anchor={{ x: .5, y: .5 }}>
       <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
@@ -90,6 +95,9 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
 }
 
 const styles = StyleSheet.create({
+  driverName: { maxWidth: 120, color: '#164338', fontWeight: '800', fontSize: 12,
+    paddingHorizontal: 7, paddingVertical: 3, marginBottom: 2, borderRadius: 8, backgroundColor: '#fff' },
+  driverMarker: { alignItems: 'center' },
   arrival: { fontSize: 11, fontWeight: '800', color: '#0b5a48', backgroundColor: '#fff', padding: 3, borderRadius: 4 },
   pin: { backgroundColor: '#0b5a48', color: 'white', textAlign: 'center', width: 26, height: 26, lineHeight: 26, borderRadius: 13, overflow: 'hidden', fontWeight: '800' },
 })
