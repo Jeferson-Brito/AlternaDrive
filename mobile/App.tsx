@@ -1,7 +1,7 @@
 import * as SplashScreen from 'expo-splash-screen'
 import { Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Alert, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { AccessibilityInfo, Animated, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Text } from './src/type'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
@@ -33,6 +33,8 @@ if (!isExpoGo) {
   void SplashScreen.preventAutoHideAsync().catch(() => undefined)
   SplashScreen.setOptions({ fade: true, duration: 220 })
 }
+
+type StartChoice = 'approach' | 'direct' | 'cancel'
 
 type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'password' | 'editVehicle' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
@@ -71,6 +73,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
   const [showProfilePasswords, setShowProfilePasswords] = useState(false)
   const [editingVehicleId, setEditingVehicleId] = useState('')
   const [profileColor, setProfileColor] = useState<string>(defaultCarColor)
+  const [startChoice, setStartChoice] = useState<{ origin: string | null; distance: number; resolve: (choice: StartChoice) => void }>()
   const [panel, setPanel] = useState<Panel | null>(null)
   const [hide, setHide] = useState(false)
   const [hideClosing, setHideClosing] = useState(false)
@@ -295,12 +298,9 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
       currentLocation = { latitude: fix.coords.latitude, longitude: fix.coords.longitude, address: 'Localização atual' }
     } else if (fix && a && b && (fix.coords.accuracy ?? Infinity) <= 50 &&
         distanceMeters(fix.coords, a) > arrivalRadius(a, b)) {
-      const choice = await new Promise<'approach' | 'direct' | 'cancel'>(resolve => {
-        Alert.alert('Ir até o ponto inicial?', 'Você está fora do Ponto A. O deslocamento até lá conta na jornada. Ao chegar, o mapa muda para o Ponto B.', [
-          { text: 'Cancelar', style: 'cancel', onPress: () => resolve('cancel') },
-          { text: 'Iniciar direto', onPress: () => resolve('direct') },
-          { text: 'Ir ao Ponto A', onPress: () => resolve('approach') },
-        ], { cancelable: true, onDismiss: () => resolve('cancel') })
+      Keyboard.dismiss()
+      const choice = await new Promise<StartChoice>(resolve => {
+        setStartChoice({ origin: data?.defaults.defaultOrigin ?? null, distance: distanceMeters(fix!.coords, a), resolve })
       })
       if (choice === 'cancel') return
       if (choice === 'approach') approachFrom = { latitude: fix.coords.latitude, longitude: fix.coords.longitude }
@@ -316,6 +316,12 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
     show(null)
     const dashboard = await reload(token)
     if (dashboard.active) await enableTracking(dashboard.active)
+  }
+
+  function answerStartChoice(choice: StartChoice) {
+    if (!startChoice) return
+    setStartChoice(undefined)
+    startChoice.resolve(choice)
   }
 
   async function finish() {
@@ -505,10 +511,34 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
       </View>}
     </SafeAreaView>
 
-    <Modal visible={panel !== null} transparent animationType="slide" onRequestClose={() => { if (!busy) show(null) }}>
+    <Modal visible={panel !== null} transparent animationType="slide" onRequestClose={() => { if (startChoice) answerStartChoice('cancel'); else if (!busy) show(null) }}>
       <SafeAreaView style={styles.modalBase} edges={['top', 'bottom']}>
         <KeyboardAvoidingView behavior="padding" style={styles.sheetKeyboard}>
           <View style={styles.sheet}>
+            {startChoice ? <>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.title} accessibilityRole="header">Ir ao ponto de partida?</Text>
+                <IconButton icon="close" label="Voltar ao início da jornada" onPress={() => answerStartChoice('cancel')} />
+              </View>
+              <ScrollView style={styles.scroll} contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
+                <View style={styles.approachCard}>
+                  <View style={styles.approachIcon}><Icon name="route" size={23} /></View>
+                  <View style={styles.approachDetails}>
+                    <Text style={ui.muted}>Ponto A · Partida</Text>
+                    <Text style={styles.label}>{startChoice.origin ?? 'Ponto de partida cadastrado'}</Text>
+                    <Text style={ui.muted}>{startChoice.distance < 1000
+                      ? Math.round(startChoice.distance) + ' m'
+                      : (startChoice.distance / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' km'} em linha reta</Text>
+                  </View>
+                </View>
+                <Text style={styles.approachCopy}>Ao chegar ao Ponto A, o mapa segue automaticamente para o Ponto B. A quilometragem começa a contar assim que você iniciar.</Text>
+                <Button title="Navegar até o Ponto A" onPress={() => answerStartChoice('approach')} />
+                <Button title="Ir direto ao Ponto B" secondary onPress={() => answerStartChoice('direct')} />
+                <Pressable accessibilityRole="button" style={styles.loginLink} onPress={() => answerStartChoice('cancel')}>
+                  <Text style={styles.linkText}>Voltar</Text>
+                </Pressable>
+              </ScrollView>
+            </> : <>
             <View style={styles.sheetHeader}><Text style={styles.title}>{panel && titles[panel]}</Text><IconButton icon="close" label="Fechar" disabled={busy} onPress={() => show(null)} /></View>
             <ScrollView key={panel} style={styles.scroll} contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
               {secureError}
@@ -667,6 +697,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
             {panel === 'start' && <View style={styles.startFooter}>
               {submit('Iniciar jornada', begin, !vehicleId || !validOdometer)}
             </View>}
+            </>}
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -700,6 +731,11 @@ export default function App() {
 
 const styles = StyleSheet.create({
   appSurface: { flex: 1, backgroundColor: '#f4f9f6' },
+  approachCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#edf6f1',
+    borderWidth: 1, borderColor: '#dfebe4', borderRadius: 18, padding: 12 },
+  approachIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d9ebe3' },
+  approachDetails: { flex: 1, gap: 2 },
+  approachCopy: { color: '#3d5d51', fontSize: 14, lineHeight: 20 },
   startFooter: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#dceae3' },
   loginLink: { alignItems: 'center', justifyContent: 'center', minHeight: 42 },
   linkText: { color: '#0b5a48', fontWeight: '800', fontSize: 13 },
