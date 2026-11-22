@@ -21,10 +21,11 @@ import { DriverMarker } from './src/DriverMarker'
 import { carColors, defaultCarColor } from '../src/car-colors'
 import { Admin } from './src/Admin'
 import { Report } from './src/Report'
+import { changeDriverSharing, hiddenDriverJourney } from './src/driver-sharing'
 import { useNearbyDrivers } from './src/nearby-drivers'
 import { useRoadRoute } from './src/road-route'
 import { type Boarding, type Closing, type Dashboard, type Place, money, numeric } from './src/model'
-import { measuredJourneyKm, onArrival, prepareTracking, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
+import { measuredJourneyKm, onArrival, prepareTracking, recordForegroundLocation, resumeBackgroundTracking, startTracking, stopTracking } from './src/tracking'
 import { arrivalRadius, distanceMeters } from '../src/arrival'
 import { workDuration } from '../src/journey-time'
 
@@ -130,9 +131,11 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
     void Promise.all([
       readSession(), SecureStore.getItemAsync('alternadrive.hide-finances').catch(() => null),
       SecureStore.getItemAsync('alternadrive.hide-closing-finances').catch(() => null),
-    ]).then(async ([saved, privacy, closingPrivacy]) => {
+      hiddenDriverJourney().catch(() => null),
+    ]).then(async ([saved, privacy, closingPrivacy, hiddenDriver]) => {
       setHide(privacy === 'true')
       setHideClosing(closingPrivacy === 'true')
+      setHiddenJourneyId(hiddenDriver ?? undefined)
       setToken(saved)
       if (saved) await reload(saved)
     }).catch(failure => setError(failure.message)).finally(() => setReady(true))
@@ -191,6 +194,9 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
       if (!permission.granted || cancelled || !active) return
       await prepareTracking(active)
       if (cancelled) return
+      void resumeBackgroundTracking().then(enabled => {
+        if (enabled && !cancelled) setGpsStatus('GPS em segundo plano ativo')
+      }).catch(() => undefined)
       watcher = await Location.watchPositionAsync({
         accuracy: Location.Accuracy.High, distanceInterval: 3, timeInterval: 1000,
       }, location => {
@@ -465,10 +471,13 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
             <View style={styles.sharing}>
               <View style={styles.sharingCopy}>
                 <Text style={styles.label}>Aparecer no mapa do AlternaDrive</Text>
-                <Text style={ui.muted}>Compartilha a posição aproximada enquanto o app está aberto nesta jornada.</Text>
+                <Text style={ui.muted}>Compartilha a posição aproximada durante a jornada, inclusive em segundo plano quando autorizado.</Text>
               </View>
               <Switch accessibilityLabel="Aparecer no mapa do AlternaDrive" value={hiddenJourneyId !== active.id}
-                onValueChange={enabled => setHiddenJourneyId(enabled ? undefined : active.id)} />
+                disabled={busy} onValueChange={enabled => {
+                  setHiddenJourneyId(enabled ? undefined : active.id)
+                  void run(() => changeDriverSharing(active.id, enabled, token))
+                }} />
             </View>
             <Text style={ui.muted}>Tempo trabalhado · {workDuration(active.startedAt, Date.now())}</Text>
             <View style={styles.actionRow}>

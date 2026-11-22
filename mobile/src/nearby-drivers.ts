@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
-import { api } from './api'
+import { refreshDriverPresence } from './driver-sharing'
 import type { RoadLine } from '../../src/route-geometry'
 import type { Point } from './model'
 
@@ -15,6 +15,7 @@ export function useNearbyDrivers(token: string | null, center: Point | null, pos
 
   useEffect(() => {
     if (!token) { setDrivers([]); return }
+    const session = token
     let disposed = false
     let running = false
     function refresh() {
@@ -34,20 +35,17 @@ export function useNearbyDrivers(token: string | null, center: Point | null, pos
             duration: road.duration,
             coordinates: coordinates.filter((_, index) => index % stride === 0 || index === coordinates.length - 1),
           } : undefined
-          const result = await api<NearbyDriver[]>('drivers/nearby', { center: coarse, journeyId, route }, token)
+          const result = await refreshDriverPresence(session, coarse, journeyId, route)
           if (!disposed) setDrivers(result)
         } catch {
           if (!disposed) setDrivers([])
         }
       }).finally(() => { running = false })
     }
-    function hide() {
-      if (sharingJourney) pending.current = pending.current.then(() => api('drivers/hide', {}, token)).then(() => undefined, () => undefined)
-    }
     refresh()
     const timer = setInterval(refresh, 3000)
-    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); else hide() })
-    return () => { disposed = true; clearInterval(timer); listener.remove(); hide() }
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh() })
+    return () => { disposed = true; clearInterval(timer); listener.remove() }
   }, [token, sharingJourney])
 
   return drivers

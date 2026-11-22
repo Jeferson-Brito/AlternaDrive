@@ -1,3 +1,5 @@
+import { AppState } from 'react-native'
+import { hiddenDriverJourney, refreshDriverPresence } from './driver-sharing'
 import * as Location from 'expo-location'
 import * as SecureStore from 'expo-secure-store'
 import * as TaskManager from 'expo-task-manager'
@@ -125,9 +127,51 @@ export function recordForegroundLocation(location: Location.LocationObject) {
   void enqueue([location])
 }
 
+async function shareBackgroundLocation(locations: Location.LocationObject[]) {
+  if (AppState.currentState === 'active') return
+  const raw = await SecureStore.getItemAsync(journeyKey)
+  if (!raw) return
+  const tracking = JSON.parse(raw) as Tracking
+  if (await hiddenDriverJourney() === tracking.id) return
+  const latest = locations.reduce<Location.LocationObject | undefined>((best, item) =>
+    (item.coords.accuracy ?? Infinity) <= 50 && (!best || item.timestamp > best.timestamp) ? item : best, undefined)
+  if (!latest || Date.now() - latest.timestamp > 15000) return
+  const token = await readSession()
+  if (!token || await SecureStore.getItemAsync(journeyKey) !== raw) return
+  await refreshDriverPresence(token, {
+    latitude: Math.round(latest.coords.latitude * 1000) / 1000,
+    longitude: Math.round(latest.coords.longitude * 1000) / 1000,
+  }, tracking.id)
+}
+
 if (!isExpoGo) TaskManager.defineTask<{ locations: Location.LocationObject[] }>(taskName, async ({ data, error }) => {
-  if (!error && data?.locations.length) return enqueue(data.locations)
+  if (!error && data?.locations.length) {
+    await Promise.all([enqueue(data.locations), shareBackgroundLocation(data.locations).catch(() => undefined)])
+  }
 })
+
+let backgroundSetup: Promise<boolean> | undefined
+
+export function resumeBackgroundTracking() {
+  if (isExpoGo) return Promise.resolve(false)
+  backgroundSetup ??= (async () => {
+    if (!(await Location.getBackgroundPermissionsAsync()).granted) return false
+    const previous = await TaskManager.getTaskOptionsAsync<Location.LocationTaskOptions>(taskName)
+    if (previous?.distanceInterval === 0 && previous.timeInterval === 3000 &&
+        await Location.hasStartedLocationUpdatesAsync(taskName)) return true
+    await Location.startLocationUpdatesAsync(taskName, {
+      accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 0,
+      foregroundService: {
+        notificationTitle: 'AlternaDrive · jornada ativa',
+        notificationBody: 'O GPS acompanha a jornada até você tocar em Finalizar.',
+        notificationColor: '#0b5a48',
+        killServiceOnDestroy: false,
+      },
+    })
+    return true
+  })().finally(() => { backgroundSetup = undefined })
+  return backgroundSetup
+}
 
 export async function startTracking(journey: Tracking) {
   const foreground = await Location.requestForegroundPermissionsAsync()
@@ -135,21 +179,11 @@ export async function startTracking(journey: Tracking) {
   await prepareTracking(journey)
   if (isExpoGo) return 'foreground'
   const background = await Location.requestBackgroundPermissionsAsync()
-  if (!background.granted) return 'foreground'
-  if (!(await Location.hasStartedLocationUpdatesAsync(taskName))) {
-    await Location.startLocationUpdatesAsync(taskName, {
-      accuracy: Location.Accuracy.High, timeInterval: 4000, distanceInterval: 10,
-      foregroundService: {
-        notificationTitle: 'AlternaDrive · jornada ativa',
-        notificationBody: 'O GPS acompanha a jornada até você tocar em Finalizar.',
-        notificationColor: '#0b5a48',
-      },
-    })
-  }
-  return 'background'
+  return background.granted && await resumeBackgroundTracking() ? 'background' : 'foreground'
 }
 
 export async function stopTracking() {
+  await backgroundSetup?.catch(() => undefined)
   const raw = await SecureStore.getItemAsync(journeyKey)
   await SecureStore.deleteItemAsync(journeyKey)
   if (raw) {
