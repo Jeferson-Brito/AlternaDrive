@@ -34,10 +34,18 @@ export async function measuredJourneyKm(id: string) {
   return meter.samples >= 2 ? Math.round(meter.meters / 10) / 100 : null
 }
 
-export async function prepareTracking(journey: Tracking) {
+export async function prepareTracking(journey: Tracking, initialFix?: Location.LocationObject | null) {
   const raw = await SecureStore.getItemAsync(journeyKey)
   if (raw && (JSON.parse(raw) as Tracking).id === journey.id) return
   const { id, pointA, pointB, arrivals, approachingStart, startedAt } = journey
+  const startTime = Date.parse(startedAt)
+  if (initialFix?.coords.accuracy != null && Math.abs(startTime - initialFix.timestamp) <= 10_000) {
+    const { latitude, longitude, accuracy, speed } = initialFix.coords
+    const initial = accumulateDistance(emptyTrack, {
+      latitude, longitude, accuracy, speed, timestamp: startTime,
+    })
+    if (initial.samples) await SecureStore.setItemAsync(distanceKey(id), JSON.stringify(initial))
+  }
   await SecureStore.setItemAsync(journeyKey, JSON.stringify({ id, pointA, pointB, arrivals, approachingStart, startedAt }))
 }
 

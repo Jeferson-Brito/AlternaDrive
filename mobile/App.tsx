@@ -273,7 +273,7 @@ function Operation() {
     } else if (fix && a && b && (fix.coords.accuracy ?? Infinity) <= 50 &&
         distanceMeters(fix.coords, a) > arrivalRadius(a, b)) {
       const choice = await new Promise<'approach' | 'direct' | 'cancel'>(resolve => {
-        Alert.alert('Ir até o ponto inicial?', 'Você está fora do Ponto A. Ao chegar lá, o mapa muda automaticamente para o Ponto B.', [
+        Alert.alert('Ir até o ponto inicial?', 'Você está fora do Ponto A. O deslocamento até lá conta na jornada. Ao chegar, o mapa muda para o Ponto B.', [
           { text: 'Cancelar', style: 'cancel', onPress: () => resolve('cancel') },
           { text: 'Iniciar direto', onPress: () => resolve('direct') },
           { text: 'Ir ao Ponto A', onPress: () => resolve('approach') },
@@ -285,7 +285,10 @@ function Operation() {
     const created = await api<NonNullable<Dashboard['active']>>('journeys', {
       vehicleId, startKm: numeric(first), currentLocation, approachFrom,
     }, token)
-    if (permission.granted) await prepareTracking(created)
+    if (permission.granted) {
+      const latest = await Location.getLastKnownPositionAsync({ maxAge: 10000, requiredAccuracy: 35 }).catch(() => null)
+      await prepareTracking(created, latest ?? fix)
+    }
     if (fix) setPosition(fix)
     show(null)
     const dashboard = await reload(token)
