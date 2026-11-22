@@ -1,6 +1,7 @@
+import * as SplashScreen from 'expo-splash-screen'
 import { Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Alert, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { AccessibilityInfo, ActivityIndicator, Animated, Alert, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Text } from './src/type'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
@@ -12,7 +13,7 @@ import { JourneyMap, LoginMap } from './src/AppMap'
 import { isExpoGo } from './src/environment'
 import { VehicleForm } from './src/VehicleForm'
 import { RouteForm } from './src/RouteForm'
-import { Icon, IconButton, Metric, Shortcut } from './src/operation-ui'
+import { Icon, IconButton, MenuRow, Metric, Shortcut } from './src/operation-ui'
 import { Passenger, usePassengerDemand } from './src/Passenger'
 import { DriverMarker } from './src/DriverMarker'
 import { carColors, defaultCarColor } from '../src/car-colors'
@@ -24,6 +25,20 @@ import { type Boarding, type Closing, type Dashboard, type Place, money, numeric
 import { measuredJourneyKm, onArrival, prepareTracking, recordForegroundLocation, startTracking, stopTracking } from './src/tracking'
 import { arrivalRadius, distanceMeters } from '../src/arrival'
 import { workDuration } from '../src/journey-time'
+
+if (!isExpoGo) {
+  void SplashScreen.preventAutoHideAsync().catch(() => undefined)
+  SplashScreen.setOptions({ fade: true, duration: 220 })
+}
+
+function Startup() {
+  return <View style={styles.startup} accessibilityLabel="Abrindo AlternaDrive">
+    <StatusBar style="light" />
+    <Image accessibilityIgnoresInvertColors source={require('./assets/alternadrive.png')} style={styles.startupIcon} />
+    <Text style={styles.startupTitle}>AlternaDrive</Text>
+    <ActivityIndicator color="#97efd1" size="small" style={styles.startupProgress} />
+  </View>
+}
 
 type Panel = 'closing' | 'report' | 'menu' | 'profile' | 'password' | 'editVehicle' | 'route' | 'vehicle' | 'start' | 'group' | 'finish' | 'fuel' | 'expense'
 const titles: Record<Panel, string> = {
@@ -312,17 +327,18 @@ function Operation() {
 
   if (passenger) return <Passenger close={() => setPassenger(false)} />
 
-  if (!ready || !token || !data) return <View style={styles.root}>
+  if (!ready || (token && !data && !error)) return <Startup />
+
+  if (!token || !data) return <View style={styles.root}>
     <LoginMap bottomInset={bottom} />
     <SafeAreaView pointerEvents="box-none" style={styles.login}>
       <KeyboardAvoidingView behavior="padding" style={styles.keyboard}>
         <ScrollView contentContainerStyle={styles.loginBody} keyboardShouldPersistTaps="handled">
           <View style={styles.loginCard}>
             <Brand />
-            <Text style={styles.title}>{!ready ? 'Carregando…' : token ? 'Conectando à sua conta' : register ? 'Criar conta' : 'Entre na sua conta'}</Text>
+            <Text style={styles.title}>{token ? 'Não foi possível conectar' : register ? 'Criar conta' : 'Entre na sua conta'}</Text>
             {secureError}
-            {ready && !token && <Button secondary title="Sou passageiro" onPress={() => setPassenger(true)} />}
-            {ready && (token ? <Button title="Tentar novamente" disabled={busy} onPress={() => void run(async () => { await reload(token) })} /> : <>
+            {token ? <Button title="Tentar novamente" disabled={busy} onPress={() => void run(async () => { await reload(token) })} /> : <>
               {register && <Field label="Nome" value={name} onChangeText={setName} />}
               <Field label="E-mail" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
               <Field label="Senha" value={password} onChangeText={setPassword} secureTextEntry={!visiblePassword} autoCapitalize="none"
@@ -334,8 +350,13 @@ function Operation() {
                 setToken(session)
                 await reload(session)
               })} />
-              <Button secondary title={register ? 'Já tenho conta' : 'Criar conta'} onPress={() => { setRegister(!register); setError('') }} />
-            </>)}
+              <Pressable accessibilityRole="button" style={styles.loginLink} onPress={() => { setRegister(!register); setError('') }}>
+                <Text style={styles.linkText}>{register ? 'Já tenho conta' : 'Criar conta'}</Text>
+              </Pressable>
+            </>}
+            {!token && <View style={styles.loginPassenger}>
+              <MenuRow icon="route" label="Abrir mapa do passageiro" onPress={() => setPassenger(true)} />
+            </View>}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -459,7 +480,12 @@ function Operation() {
             <Icon name="route" color="#fff" size={22} />
             <Text style={ui.buttonText}>{data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veículo'}</Text>
           </Pressable>
-          {!!data.defaults.defaultPointA && <Button secondary title="Editar percurso" onPress={() => show('route')} />}
+          {!!data.defaults.defaultPointA && <Pressable accessibilityRole="button" accessibilityLabel="Editar percurso"
+            style={({ pressed }) => [styles.homeRoute, pressed && ui.dim]} onPress={() => show('route')}>
+            <Icon name="route" size={17} />
+            <Text numberOfLines={1} style={styles.homeRouteLabel}>{data.defaults.defaultDestination}</Text>
+            <Text style={styles.linkText}>Editar</Text>
+          </Pressable>}
         </>}
       </View>}
     </SafeAreaView>
@@ -556,12 +582,17 @@ function Operation() {
                     <Button secondary title="Ver perfil" onPress={() => show('profile')} />
                   </View>
                 </View>
-                {data.user.isAdmin && <Button secondary title="Administração" onPress={() => { show(null); setAdminOpen(true) }} />}
-                <Button secondary title="Lucro por dia" onPress={() => show('report')} />
-                <Button secondary title="Percurso e tarifa" onPress={() => show('route')} />
-                <Button secondary title="Cadastrar veículo" onPress={() => show('vehicle')} />
-                {!!data.vehicles.length && <Button secondary title="Abastecimento" onPress={() => show('fuel')} />}
-                <Button secondary title="Registrar despesa" onPress={() => show('expense')} />
+
+                <View style={styles.menuGroup}>
+                  <MenuRow icon="chart" label="Lucro por dia" onPress={() => show('report')} />
+                  <MenuRow icon="route" label="Percurso e tarifa" onPress={() => show('route')} />
+                  <MenuRow icon="car" label="Cadastrar veículo" onPress={() => show('vehicle')} />
+                </View>
+                <View style={styles.menuGroup}>
+                  {!!data.vehicles.length && <MenuRow icon="fuel" label="Abastecimento" onPress={() => show('fuel')} />}
+                  <MenuRow icon="receipt" label="Registrar despesa" onPress={() => show('expense')} />
+                  {data.user.isAdmin && <MenuRow icon="profile" label="Administração" onPress={() => { show(null); setAdminOpen(true) }} />}
+                </View>
                 {submit('Sair', async () => {
                   await api('logout', {}, token)
                   await stopTracking().catch(() => undefined)
@@ -638,11 +669,30 @@ function Operation() {
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({ Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold })
-  if (!fontsLoaded && !fontError) return <View style={styles.root} />
-  return <SafeAreaProvider><StatusBar style="dark" /><Operation /></SafeAreaProvider>
+  const ready = fontsLoaded || !!fontError
+  useEffect(() => {
+    if (ready && !isExpoGo) void SplashScreen.hideAsync().catch(() => undefined)
+  }, [ready])
+  return <SafeAreaProvider>
+    <View style={styles.appSurface}>
+      <StatusBar style="dark" />
+      {ready ? <Operation /> : <Startup />}
+    </View>
+  </SafeAreaProvider>
 }
 
 const styles = StyleSheet.create({
+  appSurface: { flex: 1, backgroundColor: '#102f29' },
+  startup: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#102f29' },
+  startupIcon: { width: 92, height: 92, borderRadius: 24 },
+  startupTitle: { color: '#fff', fontSize: 30, fontWeight: '800', marginTop: 15 },
+  startupProgress: { marginTop: 26 },
+  loginLink: { alignItems: 'center', justifyContent: 'center', minHeight: 42 },
+  linkText: { color: '#0b5a48', fontWeight: '800', fontSize: 13 },
+  loginPassenger: { borderTopWidth: 1, borderTopColor: '#e2ece7', paddingTop: 6 },
+  menuGroup: { borderWidth: 1, borderColor: '#e1ece6', borderRadius: 17, overflow: 'hidden', backgroundColor: '#fbfdfc' },
+  homeRoute: { flexDirection: 'row', alignItems: 'center', minHeight: 43, gap: 9, paddingHorizontal: 10 },
+  homeRouteLabel: { flex: 1, color: '#3c5b51', fontSize: 13, fontWeight: '700' },
   expandedActions: { gap: 8 },
   closingHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: '#eff6f2' },

@@ -2,14 +2,18 @@
   "expo": {
     "name": "AlternaDrive",
     "slug": "alternadrive",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "orientation": "portrait",
     "platforms": [
       "android"
     ],
     "android": {
       "package": "com.alternadrive.app",
-      "versionCode": 6
+      "versionCode": 7,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/alternadrive.png",
+        "backgroundColor": "#104d42"
+      }
     },
     "plugins": [
       "expo-secure-store",
@@ -22,7 +26,16 @@
         }
       ],
       "./plugins/with-windows-build-paths",
-      "./plugins/with-android-release"
+      "./plugins/with-android-release",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/alternadrive.png",
+          "imageWidth": 92,
+          "backgroundColor": "#102f29",
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "icon": "./assets/alternadrive.png"
   }

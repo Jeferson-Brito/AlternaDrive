@@ -3,6 +3,10 @@ import { Text } from './type'
 import Svg, { Path } from 'react-native-svg'
 
 const shapes = {
+  right: 'm9 6 6 6-6 6',
+  profile: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
+  car: 'm4 11 2-5h12l2 5M5 17v2m14-2v2M7 14h1m8 0h1M4 11h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Z',
+  exit: 'M10 4H5v16h5m4-12 4 4-4 4m-5-4h9',
   menu: 'M4 6h16M4 12h16M4 18h16',
   activity: 'M3 12h4l3-7 4 14 3-7h4',
   chart: 'M3 3v18h18M7 15l4-5 4 3 5-6',
@@ -42,6 +46,17 @@ export function Shortcut({ icon, text, onPress, danger }: { icon: IconName; text
   </Pressable>
 }
 
+export function MenuRow({ icon, label, onPress, disabled }: {
+  icon: IconName; label: string; onPress: () => void; disabled?: boolean
+}) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled}
+    onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && styles.menuPressed]}>
+    <View style={styles.menuIcon}><Icon name={icon} size={19} /></View>
+    <Text style={styles.menuLabel}>{label}</Text>
+    <Icon name="right" size={16} color="#6b8279" />
+  </Pressable>
+}
+
 export function Metric({ label, value, dark }: { label: string; value: string | number; dark?: boolean }) {
   return <View style={[styles.metric, dark && styles.metricDark]}>
     <Text style={[styles.metricLabel, dark && styles.metricLabelDark]}>{label}</Text>
@@ -50,6 +65,11 @@ export function Metric({ label, value, dark }: { label: string; value: string | 
 }
 
 const styles = StyleSheet.create({
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 55, paddingHorizontal: 10, paddingVertical: 7,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e1ece6' },
+  menuPressed: { backgroundColor: '#edf5f1' },
+  menuIcon: { width: 35, height: 35, borderRadius: 11, backgroundColor: '#e9f3ee', alignItems: 'center', justifyContent: 'center' },
+  menuLabel: { flex: 1, color: '#16362d', fontWeight: '800', fontSize: 15 },
   icon: { minWidth: 42, minHeight: 42, borderRadius: 12, backgroundColor: '#edf4f0', alignItems: 'center', justifyContent: 'center' },
   dark: { backgroundColor: '#275247' },
   dim: { opacity: .65 },
