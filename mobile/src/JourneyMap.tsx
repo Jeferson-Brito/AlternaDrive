@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Text } from './type'
-import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type MapProps, type MapRef } from '@maplibre/maplibre-react-native'
+import { Camera, GeoJSONSource, Layer, Map, Marker, ViewAnnotation, type CameraRef, type MapProps, type MapRef } from '@maplibre/maplibre-react-native'
 import { monochromeStreets } from '../../src/map-style'
 import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
@@ -84,19 +84,19 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
         <StopMarker count={stop.count} />
       </ViewAnnotation>)}
       {waitingStop && <ViewAnnotation id="passenger-stop" lngLat={coords(waitingStop)}><StopMarker count={1} /></ViewAnnotation>}
-      {drivers.map(driver => <ViewAnnotation key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)} onPress={() => driverName.show(driver.id)}>
+      {drivers.map(driver => <Marker key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)} anchor="bottom" onPress={() => driverName.show(driver.id)}>
         <View style={{ alignItems: 'center' }}>
           {driverName.selected === driver.id && !!driver.firstName && <Text style={styles.driverName} numberOfLines={1}>{driver.firstName}</Text>}
           <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} carColor={driver.carColor} />
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
         </View>
-      </ViewAnnotation>)}
-      {active && current && <ViewAnnotation id="driver" lngLat={coords(current)} onPress={() => driverName.show('own')}>
+      </Marker>)}
+      {active && current && <Marker id="driver" lngLat={coords(current)} anchor="bottom" onPress={() => driverName.show('own')}>
         <View style={{ alignItems: 'center' }}>
           {driverName.selected === 'own' && !!ownFirstName && <Text style={styles.driverName} numberOfLines={1}>{ownFirstName}</Text>}
           <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
         </View>
-      </ViewAnnotation>}
+      </Marker>}
     </Map>
     {drawPoint && <MapPencil key={drawRevision} onPoint={drawPoint} locate={async (x, y) => {
       const result = await map.current?.unproject([x, y])

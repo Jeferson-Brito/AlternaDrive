@@ -2,14 +2,14 @@
   "expo": {
     "name": "AlternaDrive",
     "slug": "alternadrive",
-    "version": "0.1.14",
+    "version": "0.1.15",
     "orientation": "portrait",
     "platforms": [
       "android"
     ],
     "android": {
       "package": "com.alternadrive.app",
-      "versionCode": 15,
+      "versionCode": 16,
       "adaptiveIcon": {
         "foregroundImage": "./assets/alternadrive.png",
         "backgroundColor": "#104d42"
