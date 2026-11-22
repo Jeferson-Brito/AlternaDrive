@@ -3,7 +3,7 @@ import { AccessibilityInfo, AppState } from 'react-native'
 import { distanceMeters } from '../../src/arrival'
 import type { Coordinates, RoadLine } from '../../src/route-geometry'
 
-export function useRouteHighlight(road: RoadLine) {
+export function useRouteHighlight(road: RoadLine, enabled = true, refreshMs = 33) {
   const [phase, setPhase] = useState(-1)
   const distances = useMemo(() => {
     const coordinates = road.coordinates
@@ -19,6 +19,7 @@ export function useRouteHighlight(road: RoadLine) {
   }, [road])
 
   useEffect(() => {
+    if (!enabled) { setPhase(-1); return }
     let alive = true
     let reduced = false
     let timer: ReturnType<typeof setInterval> | undefined
@@ -29,13 +30,13 @@ export function useRouteHighlight(road: RoadLine) {
       const start = Date.now()
       const update = () => setPhase(((Date.now() - start) % 7000) / 7000)
       update()
-      timer = setInterval(update, 33)
+      timer = setInterval(update, refreshMs)
     }
     const motion = AccessibilityInfo.addEventListener('reduceMotionChanged', enabled => { reduced = enabled; sync() })
     const visibility = AppState.addEventListener('change', sync)
     void AccessibilityInfo.isReduceMotionEnabled().then(enabled => { reduced = enabled; sync() }).catch(sync)
     return () => { alive = false; clearInterval(timer); motion.remove(); visibility.remove() }
-  }, [road])
+  }, [road, enabled, refreshMs])
 
   return useMemo(() => {
     const length = distances[distances.length - 1] ?? 0

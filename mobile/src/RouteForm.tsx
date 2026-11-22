@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from './type'
 import { Address, Button, NumberField } from './controls'
 import { numeric, type Place } from './model'
 

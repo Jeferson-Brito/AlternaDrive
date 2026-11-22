@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from './type'
 import Svg, { Circle, Line, Path, Text as AxisText } from 'react-native-svg'
 import { api } from './api'
 import { Button, Field, ui } from './controls'

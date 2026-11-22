@@ -1,5 +1,7 @@
+import { Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, AppState, Image, Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { Text } from './src/type'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location'
 import * as SecureStore from 'expo-secure-store'
@@ -61,6 +63,9 @@ function Operation() {
   const [profileColor, setProfileColor] = useState<string>(defaultCarColor)
   const [panel, setPanel] = useState<Panel | null>(null)
   const [hide, setHide] = useState(false)
+  const [hideClosing, setHideClosing] = useState(false)
+  const actionsOpacity = useRef(new Animated.Value(1)).current
+  const reduceMotion = useRef(false)
   const [expanded, setExpanded] = useState(false)
   const [following, setFollowing] = useState(true)
   const [hiddenJourneyId, setHiddenJourneyId] = useState<string>()
@@ -102,8 +107,12 @@ function Operation() {
   }
 
   useEffect(() => {
-    void Promise.all([readSession(), SecureStore.getItemAsync('alternadrive.hide-finances').catch(() => null)]).then(async ([saved, privacy]) => {
+    void Promise.all([
+      readSession(), SecureStore.getItemAsync('alternadrive.hide-finances').catch(() => null),
+      SecureStore.getItemAsync('alternadrive.hide-closing-finances').catch(() => null),
+    ]).then(async ([saved, privacy, closingPrivacy]) => {
       setHide(privacy === 'true')
+      setHideClosing(closingPrivacy === 'true')
       setToken(saved)
       if (saved) await reload(saved)
     }).catch(failure => setError(failure.message)).finally(() => setReady(true))
@@ -130,6 +139,27 @@ function Operation() {
     setHide(next)
     void SecureStore.setItemAsync('alternadrive.hide-finances', String(next)).catch(() => undefined)
   }
+  function toggleClosingPrivacy() {
+    const next = !hideClosing
+    setHideClosing(next)
+    void SecureStore.setItemAsync('alternadrive.hide-closing-finances', String(next)).catch(() => undefined)
+  }
+
+  useEffect(() => {
+    let mounted = true
+    const setPreference = (enabled: boolean) => { if (mounted) reduceMotion.current = enabled }
+    void AccessibilityInfo.isReduceMotionEnabled().then(setPreference).catch(() => undefined)
+    const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setPreference)
+    return () => { mounted = false; listener.remove() }
+  }, [])
+  useEffect(() => {
+    if (!expanded || reduceMotion.current) { actionsOpacity.setValue(1); return }
+    actionsOpacity.setValue(0)
+    const animation = Animated.timing(actionsOpacity, { toValue: 1, duration: 190, useNativeDriver: true })
+    animation.start()
+    return () => animation.stop()
+  }, [actionsOpacity, expanded])
+
   const drivers = useNearbyDrivers(token, routeA, position?.coords && (position.coords.accuracy ?? Infinity) <= 50 ? position.coords : null,
     activeId !== hiddenJourneyId ? activeId : undefined, route.road)
   useEffect(() => { setExpanded(false); setFollowing(true) }, [activeId])
@@ -140,7 +170,7 @@ function Operation() {
     void Location.getForegroundPermissionsAsync().then(async permission => {
       if (!permission.granted || cancelled) return
       watcher = await Location.watchPositionAsync({
-        accuracy: Location.Accuracy.High, distanceInterval: 8, timeInterval: 3000,
+        accuracy: Location.Accuracy.High, distanceInterval: 3, timeInterval: 1000,
       }, location => {
         if (cancelled) return
         setPosition(location)
@@ -255,7 +285,7 @@ function Operation() {
 
   const stats = data.summaries.find(item => item.period === 'day')
   const destination = active ? (active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
-  const dayRevenue = hide ? '••••' : money((stats?.revenue ?? 0) + pendingBoarding * (active?.fare ?? 0))
+  const dayRevenue = money((stats?.revenue ?? 0) + pendingBoarding * (active?.fare ?? 0))
   const dayBoardings = (stats?.passengers ?? 0) + pendingBoarding
   const vehicles = data.vehicles.map(vehicle => <Button key={vehicle.id} secondary={vehicle.id !== vehicleId}
     title={vehicle.name} onPress={() => setVehicleId(vehicle.id)} />)
@@ -272,7 +302,7 @@ function Operation() {
     <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
       {active ? <View style={styles.stats}>
         <Metric label="Embarques" value={dayBoardings} dark />
-        <Metric label="Receita" value={dayRevenue} dark />
+        <Metric label="Receita" value={hide ? '••••' : dayRevenue} dark />
         <Metric label="Lucro est." value={hide ? '••••' : money(stats?.profit ?? null)} dark />
         <IconButton dark icon={hide ? 'eyeOff' : 'eye'} label={hide ? 'Exibir valores' : 'Ocultar valores'} onPress={toggleFinancePrivacy} />
       </View> : <View style={styles.homeTop} pointerEvents="box-none">
@@ -343,7 +373,7 @@ function Operation() {
             <Text style={ui.buttonText}>Passageiro</Text>
             <Text style={styles.fareBadge}>{money(active.fare)}</Text>
           </Pressable>
-          {expanded && <>
+          {expanded && <Animated.View style={[styles.expandedActions, { opacity: actionsOpacity }]}>
             {!!gpsStatus && <Text style={ui.muted}>{gpsStatus}</Text>}
             <View style={styles.sharing}>
               <View style={styles.sharingCopy}>
@@ -362,13 +392,14 @@ function Operation() {
             </View>
             {!isExpoGo && gpsStatus !== 'GPS em segundo plano ativo' && <Button secondary title="Ativar GPS em segundo plano"
               disabled={busy} onPress={() => void run(() => enableTracking(active))} />}
-          </>}
+          </Animated.View>}
         </> : <>
           <Pressable accessibilityRole="button" style={({ pressed }) => [ui.button, styles.homeStart, pressed && ui.dim]}
             onPress={() => show(!data.vehicles.length ? 'vehicle' : !data.defaults.defaultPointA ? 'route' : 'start')}>
             <Icon name="route" color="#fff" size={22} />
             <Text style={ui.buttonText}>{data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veículo'}</Text>
           </Pressable>
+          {!!data.defaults.defaultPointA && <Button secondary title="Editar percurso" onPress={() => show('route')} />}
         </>}
       </View>}
     </SafeAreaView>
@@ -382,8 +413,12 @@ function Operation() {
               {secureError}
               {panel === 'closing' && journeyClosing && <>
                 <View style={styles.closingHero}>
-                  <Text style={styles.closingLabel}>Lucro líquido estimado</Text>
-                  <Text style={styles.closingValue}>{hide ? '••••' : money(journeyClosing.profit)}</Text>
+                  <View style={styles.closingHeading}>
+                    <Text style={styles.closingLabel}>Lucro líquido estimado</Text>
+                    <IconButton dark icon={hideClosing ? 'eyeOff' : 'eye'} label={hideClosing ? 'Exibir valores do resumo' : 'Ocultar valores do resumo'}
+                      onPress={toggleClosingPrivacy} />
+                  </View>
+                  <Text style={styles.closingValue}>{hideClosing ? '••••' : money(journeyClosing.profit)}</Text>
                 </View>
                 <View style={styles.closingMetrics}>
                   <Metric label="Tempo trabalhado" value={workDuration(journeyClosing.startedAt, journeyClosing.endedAt)} />
@@ -394,7 +429,7 @@ function Operation() {
                   {[['Receita bruta', journeyClosing.revenue], ['Combustível estimado', journeyClosing.fuel], ['Outras despesas', journeyClosing.otherExpenses]].map(([label, value]) =>
                     <View key={String(label)} style={styles.closingRow}>
                       <Text style={ui.label}>{label}</Text>
-                      <Text style={styles.label}>{hide ? '••••' : money(value as number | null)}</Text>
+                      <Text style={styles.label}>{hideClosing ? '••••' : money(value as number | null)}</Text>
                     </View>)}
                 </View>
                 <Button title="Voltar ao mapa" onPress={() => show(null)} />
@@ -478,10 +513,15 @@ function Operation() {
               </>}
               {panel === 'route' && <RouteForm token={token} origin={pointA} destination={pointB}
                 onOrigin={setPointA} onDestination={setPointB} fare={first} onFare={setFirst} busy={busy}
-                onSave={() => void run(() => save('settings/journey', {
-                  defaultOrigin: pointA?.label, defaultDestination: pointB?.label,
-                  defaultPointA: pointA, defaultPointB: pointB, defaultFare: cents(first),
-                }))} />}
+                onSave={() => void run(async () => {
+                  const defaults = await api<Dashboard['defaults']>('settings/journey', {
+                    defaultOrigin: pointA?.label, defaultDestination: pointB?.label,
+                    defaultPointA: pointA, defaultPointB: pointB, defaultFare: cents(first),
+                  }, token)
+                  dashboardRevision.current++
+                  setData(current => current ? { ...current, defaults } : current)
+                  show(null)
+                })} />}
               {panel === 'vehicle' && <VehicleForm busy={busy} save={vehicle => void run(() => save('vehicles', vehicle))} />}
               {(panel === 'start' || panel === 'fuel') && <><Text style={styles.label}>Veículo</Text>{vehicles}</>}
               {panel === 'start' && <>
@@ -526,10 +566,14 @@ function Operation() {
 }
 
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({ Nunito_400Regular, Nunito_700Bold, Nunito_800ExtraBold })
+  if (!fontsLoaded && !fontError) return <View style={styles.root} />
   return <SafeAreaProvider><StatusBar style="dark" /><Operation /></SafeAreaProvider>
 }
 
 const styles = StyleSheet.create({
+  expandedActions: { gap: 8 },
+  closingHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: '#eff6f2' },
   profileIcon: { width: 58, height: 62, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#deeee6' },
   profileDetails: { flex: 1, gap: 6 },
@@ -548,10 +592,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 21, fontWeight: '800', color: '#142d24' },
   label: { color: '#142d24', fontWeight: '800' },
   overlay: { ...StyleSheet.absoluteFill, justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 8 },
-  card: { borderRadius: 19, padding: 12, gap: 7, backgroundColor: '#fff', elevation: 4 },
+  card: { borderRadius: 24, padding: 11, gap: 7, backgroundColor: '#fff', elevation: 3 },
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4, flexWrap: 'wrap' },
-  stats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, gap: 4, borderRadius: 15, backgroundColor: '#13392e' },
+  stats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, gap: 4, borderRadius: 21, backgroundColor: '#153c32' },
   recenter: { alignSelf: 'center', width: '83%', maxWidth: 340, paddingBottom: 9 },
   sharing: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 10, backgroundColor: '#edf4f0' },
   sharingCopy: { flex: 1, gap: 2 },
@@ -563,14 +607,14 @@ const styles = StyleSheet.create({
   closingRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 5, gap: 10 },
   homeTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   floatingMenu: { backgroundColor: '#edf4f0', borderRadius: 13, elevation: 4 },
-  dayBubble: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 16,
+  dayBubble: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 22,
     paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#e4ede8', elevation: 4 },
   dayMetric: { flexShrink: 1, minWidth: 58, gap: 2 },
   dayBoardings: { gap: 2 },
   dayDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: '#dbe9e2' },
   dayLabel: { color: '#526a60', fontSize: 11, fontWeight: '600' },
   dayValue: { color: '#15362f', fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  homeAction: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4ede8', borderRadius: 17, padding: 7, gap: 6, elevation: 4 },
+  homeAction: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4ede8', borderRadius: 23, padding: 7, gap: 6, elevation: 3 },
   homeStart: { minHeight: 52, flexDirection: 'row', gap: 8 },
   drawer: { gap: 5 },
   grip: { alignSelf: 'center', width: 32, height: 4, borderRadius: 4, backgroundColor: '#a0b8ad' },
@@ -584,7 +628,7 @@ const styles = StyleSheet.create({
   error: { color: '#8a2019', backgroundColor: '#fff0ef', padding: 9, borderRadius: 9 },
   modalBase: { flex: 1, backgroundColor: '#142f2963' },
   sheetKeyboard: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '94%', flexShrink: 1, backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, gap: 12 },
+  sheet: { maxHeight: '94%', flexShrink: 1, backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, gap: 12 },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, gap: 8 },
   scroll: { flexGrow: 0, flexShrink: 1 },
   sheetBody: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },

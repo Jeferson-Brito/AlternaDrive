@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Keyboard, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from './type'
 import { loadModels, nameAndYear, searchVehicles, type VehicleSpec } from '../../src/vehicle-catalog-search'
 import { Button, Field, NumberField, ui } from './controls'
 import { numeric, type Vehicle } from './model'

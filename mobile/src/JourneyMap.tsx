@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
+import { Text } from './type'
 import { Camera, GeoJSONSource, Layer, Map, ViewAnnotation, type CameraRef, type MapProps, type MapRef } from '@maplibre/maplibre-react-native'
 import { monochromeStreets } from '../../src/map-style'
 import { coords, navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
@@ -20,8 +21,8 @@ export function LoginMap({ bottomInset }: { bottomInset: number }) {
     <Camera initialViewState={cityView} />
   </Map>
 }
-function NativeRouteHighlight({ road }: { road: RoadLine }) {
-  const highlight = useRouteHighlight(road)
+function NativeRouteHighlight({ road, moving }: { road: RoadLine; moving: boolean }) {
+  const highlight = useRouteHighlight(road, !moving, 75)
   return <>{highlight.map(band => <GeoJSONSource key={band.id} id={'journey-highlight-' + band.id}
     data={{ type: 'LineString', coordinates: band.coordinates }}>
     <Layer type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }}
@@ -34,15 +35,18 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
   const map = useRef<MapRef>(null)
   const { height } = useWindowDimensions()
   const [loaded, setLoaded] = useState(false)
-  const { from, current, road, heading, routeError, routeKey, estimate } = route
+  const [moving, setMoving] = useState(false)
+  const exploring = useRef(false)
+  const { from, current, road, visibleRoad, heading, routeError, routeKey, estimate } = route
 
+  useEffect(() => { if (following) exploring.current = false }, [following, active?.id])
   useEffect(() => {
-    if (!loaded || (active && !following)) return
+    if (!loaded || (active && (!following || exploring.current))) return
     if (active) {
       const center = current ?? from
       if (center) camera.current?.easeTo({
         center: coords(center), zoom: navigationZoom, pitch: navigationPitch, bearing: heading,
-        padding: navigationPadding(height), duration: 700,
+        padding: navigationPadding(height), duration: 280,
       })
     } else if (passengerCenter) {
       camera.current?.easeTo({ center: coords(passengerCenter), zoom: 15, duration: 450 })
@@ -54,15 +58,24 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
     }
   }, [loaded, routeKey, current, heading, height, following, passengerCenter])
 
+  const displayed = active ? visibleRoad : road?.geometry
   return <>
     <Map ref={map} style={StyleSheet.absoluteFill} mapStyle={mapStyle} onDidFinishLoadingMap={() => setLoaded(true)} logo={false}
-      onRegionWillChange={event => { if (active && following && event.nativeEvent.userInteraction) onExplore() }}>
+      onRegionWillChange={event => {
+        if (!event.nativeEvent.userInteraction) return
+        if (!active) setMoving(true)
+        if (active && following && !exploring.current) {
+          exploring.current = true
+          onExplore()
+        }
+      }}
+      onRegionDidChange={() => { if (moving) setMoving(false) }}>
       <Camera ref={camera} initialViewState={cityView} />
-      {road && <GeoJSONSource id="journey" data={road.geometry}>
+      {displayed && <GeoJSONSource id="journey" data={displayed}>
         <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
         <Layer type="line" paint={{ 'line-color': '#9763f1', 'line-width': 5 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
       </GeoJSONSource>}
-      {!active && !routeEditor && road && <NativeRouteHighlight road={road.geometry} />}
+      {!active && !routeEditor && road && <NativeRouteHighlight road={road.geometry} moving={moving} />}
       {a && <ViewAnnotation id="point-a" lngLat={coords(a)}><Text style={styles.pin}>A</Text></ViewAnnotation>}
       {b && <ViewAnnotation id="point-b" lngLat={coords(b)}><Text style={styles.pin}>B</Text></ViewAnnotation>}
       {demand.map(stop => <ViewAnnotation key={stop.id} id={'stop-' + stop.id} lngLat={coords(stop)}>

@@ -19,7 +19,7 @@ export function monochromeStreets(style: StyleSpecification): StyleSpecification
         const casing = layer.id.endsWith('_casing')
         if (casing && !major) return []
         const color = casing ? '#aeb6bb' : major ? '#ffffff' : '#f9faf8'
-        const width = casing ? [3.5, 8, 17, 28] : major ? [2.5, 6, 14, 24] : [1.25, 3.8, 9.5, 17]
+        const width = casing ? [4, 10, 21, 32] : major ? [3, 8, 17, 28] : [1.7, 5, 12.5, 21]
         return [{
           ...layer,
           paint: {

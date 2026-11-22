@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native'
+import { Text } from './type'
+import { regularFont } from './type'
+import { IconButton } from './operation-ui'
 import { includeTypedStreetNumber, searchRouteAddresses, type AddressOption } from './address-options'
 import { formatNumberDigits } from '../../src/localized-number'
 import type { Place } from './model'
@@ -14,7 +17,7 @@ export function Button({ title, onPress, disabled, secondary, accessibilityLabel
   </Pressable>
 }
 
-export function Field({ label, trailing, ...props }: TextInputProps & { label: string; trailing?: ReactNode }) {
+export function Field({ label, trailing, ...props }: TextInputProps & { label: string; trailing?: ReactNode; ref?: React.Ref<React.ComponentRef<typeof TextInput>> }) {
   return <View style={ui.field}>
     <Text style={ui.label}>{label}</Text>
     <View>
@@ -44,6 +47,7 @@ export function NumberField({ label, mode = 'integer', value, onChange, hint }: 
 }
 
 export function Address({ label, placeholder, value, onChange, token }: { label: string; placeholder?: string; value: Place | null; onChange: (value: Place | null) => void; token: string }) {
+  const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null)
   const [text, setText] = useState(value?.label ?? '')
   const [matches, setMatches] = useState<AddressOption[]>([])
   const [approximate, setApproximate] = useState(false)
@@ -83,7 +87,14 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
   }, [text, value, retry, token])
 
   return <View style={ui.field}>
-    <Field label={label} placeholder={placeholder} value={text} maxLength={240} autoCorrect={false} onChangeText={input => { setText(input); setApproximate(false); onChange(null) }} />
+    <Field ref={inputRef} label={label} placeholder={placeholder} value={text} maxLength={240} autoCorrect={false}
+      trailing={value && <IconButton icon="close" label={'Alterar ' + label} onPress={() => {
+        onChange(null)
+        setText('')
+        setApproximate(false)
+        inputRef.current?.focus()
+      }} />}
+      onChangeText={input => { setText(input); setApproximate(false); onChange(null) }} />
     {!!hint && <Text style={ui.muted}>{hint}</Text>}
     {failed && <Button title="Tentar novamente" secondary onPress={() => setRetry(value => value + 1)} />}
     {value && <Text style={approximate ? ui.approximate : ui.confirmed}>{approximate ? 'Número informado · localização aproximada na rua' : '✓ Endereço selecionado'}</Text>}
@@ -104,19 +115,19 @@ export function Address({ label, placeholder, value, onChange, token }: { label:
 }
 
 export const ui = StyleSheet.create({
-  button: { minHeight: 49, paddingHorizontal: 13, paddingVertical: 11, borderRadius: 13, backgroundColor: '#0b5a48', alignItems: 'center', justifyContent: 'center' },
+  button: { minHeight: 49, paddingHorizontal: 13, paddingVertical: 11, borderRadius: 18, backgroundColor: '#0b5a48', alignItems: 'center', justifyContent: 'center' },
   buttonText: { color: '#fff', fontWeight: '800', textAlign: 'center', fontSize: 15 },
   secondary: { backgroundColor: '#e8f2ed' },
   secondaryText: { color: '#0b5a48' },
   dim: { opacity: .63 },
   field: { gap: 5 },
   label: { color: '#142d24', fontWeight: '700' },
-  input: { minHeight: 49, fontSize: 16, color: '#142d24', paddingHorizontal: 12, backgroundColor: '#f6faf8', borderColor: '#c6d9ce', borderWidth: 1, borderRadius: 11 },
+  input: { fontFamily: regularFont, minHeight: 49, fontSize: 16, color: '#142d24', paddingHorizontal: 12, backgroundColor: '#f6faf8', borderColor: '#c6d9ce', borderWidth: 1, borderRadius: 11 },
   inputTrailing: { paddingRight: 52 },
   trailing: { position: 'absolute', top: 0, bottom: 0, right: 4, justifyContent: 'center' },
   numberInput: { flexDirection: 'row', alignItems: 'center', minHeight: 49, paddingHorizontal: 12, backgroundColor: '#f6faf8', borderColor: '#c6d9ce', borderWidth: 1, borderRadius: 11 },
   numberPrefix: { color: '#526a60', fontWeight: '700', marginRight: 8 },
-  numberValue: { flex: 1, minHeight: 46, fontSize: 16, color: '#142d24', padding: 0, fontVariant: ['tabular-nums'] },
+  numberValue: { fontFamily: regularFont, flex: 1, minHeight: 46, fontSize: 16, color: '#142d24', padding: 0, fontVariant: ['tabular-nums'] },
   approximate: { color: '#785320', fontWeight: '600', fontSize: 12 },
   confirmed: { color: '#0b5a48', fontWeight: '700', fontSize: 12 },
   addressOptions: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d8e7df', borderRadius: 11, overflow: 'hidden' },

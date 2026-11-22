@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from './type'
 import Svg, { Path } from 'react-native-svg'
 
 const shapes = {

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { test } from 'node:test'
-import { routeProgress, travelBearing } from '../src/route-geometry'
+import { remainingRoad, routeProgress, travelBearing, type RoadLine } from '../src/route-geometry'
 import { navigationEstimate, workDuration } from '../src/journey-time'
 import { formatNumberDigits, parseNumber } from '../src/localized-number'
 import { nextManeuver } from '../src/navigation-steps'
@@ -359,4 +359,12 @@ test('groups every journey by its local calendar day and switches at midnight', 
   assert.equal(nextReportingDay(new Date('2026-11-22T02:59:59Z'), zone).toISOString(), now.toISOString())
   assert.equal(dailyProfit(records, [], 'bimester', undefined, now, zone)?.start, '2026-11-01')
   assert.equal(dailyProfit(records, [], 'semester', undefined, now, zone)?.start, '2026-07-01')
+})
+
+test('draws only the untraveled geometry after projecting the vehicle onto a road', () => {
+  const road: RoadLine = { type: 'LineString', coordinates: [[0, 0], [.01, 0], [.01, .01]] }
+  const middle = routeProgress({ latitude: .005, longitude: .01 }, road.coordinates)
+  assert.deepEqual(remainingRoad(road, middle)?.coordinates, [[.01, .005], [.01, .01]])
+  const finish = routeProgress({ latitude: .01, longitude: .01 }, road.coordinates)
+  assert.equal(remainingRoad(road, finish), undefined)
 })

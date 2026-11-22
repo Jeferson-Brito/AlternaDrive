@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from './type'
 import Svg, { Circle, Path } from 'react-native-svg'
 
 export function StopMarker({ count }: { count: number }) {

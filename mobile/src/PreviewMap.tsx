@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, useWindowDimensions } from 'react-native'
+import { StyleSheet, useWindowDimensions } from 'react-native'
+import { Text } from './type'
 import MapView, { Marker, Polyline, type MapStyleElement } from 'react-native-maps'
 import { navigationPadding, navigationPitch, navigationZoom, type RouteView } from './road-route'
 import type { RoadLine } from '../../src/route-geometry'
@@ -17,7 +18,7 @@ const previewPalette: MapStyleElement[] = [
   { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#e9eae8' }] },
   { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#e2e9e1' }] },
   { featureType: 'landscape.natural.landcover', elementType: 'geometry', stylers: [{ color: '#c8dfc7' }] },
-  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }, { weight: 2 }] },
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }, { weight: 3 }] },
   { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#d4d9d7' }] },
   { featureType: 'road.local', elementType: 'geometry.stroke', stylers: [{ color: '#e2e5e3' }] },
   { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }] },
@@ -44,14 +45,14 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
   const [ready, setReady] = useState(false)
-  const { road, from, current, heading, routeKey } = route ?? {}
+  const { road, visibleRoad, from, current, heading, routeKey } = route ?? {}
   const center = active ? (current ?? from) : null
-  const routeCoordinates = road?.geometry.coordinates.map(([longitude, latitude]) => ({ latitude, longitude }))
+  const routeCoordinates = (active ? visibleRoad : road?.geometry)?.coordinates.map(([longitude, latitude]) => ({ latitude, longitude }))
   useEffect(() => {
     if (!ready || (active && !following)) return
     if (center) map.current?.animateCamera({
       center, zoom: navigationZoom, pitch: navigationPitch, heading: heading ?? 0,
-    }, { duration: 550 })
+    }, { duration: 280 })
     else if (passengerCenter) map.current?.animateCamera({ center: passengerCenter, zoom: 15 }, { duration: 450 })
     else if (a && b) map.current?.fitToCoordinates([a, b], { edgePadding: { top: 120, right: 48, bottom: 190, left: 48 } })
   }, [ready, routeKey, center, heading, height, following, passengerCenter])

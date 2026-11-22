@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from './type'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { distanceMeters } from '../../src/arrival'
 import { api } from './api'

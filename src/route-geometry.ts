@@ -22,8 +22,11 @@ export function routeProgress(position: Point, coordinates: Coordinates[]) {
   let lengthSoFar = 0
   let covered = 0
   let bearing: number | undefined
+  let segmentIndex = 0
+  let fractionOnSegment = 0
   let [ax, ay] = local(coordinates[0])
-  for (const coordinate of coordinates.slice(1)) {
+  for (let index = 1; index < coordinates.length; index++) {
+    const coordinate = coordinates[index]
     const [bx, by] = local(coordinate)
     const dx = bx - ax, dy = by - ay
     const squared = dx * dx + dy * dy
@@ -33,13 +36,24 @@ export function routeProgress(position: Point, coordinates: Coordinates[]) {
     if (length > 0 && gap < distance) {
       distance = gap
       covered = lengthSoFar + fraction * length
+      segmentIndex = index - 1
+      fractionOnSegment = fraction
       bearing = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360
     }
     lengthSoFar += length
     ax = bx
     ay = by
   }
-  return { distance, remaining: lengthSoFar ? 1 - covered / lengthSoFar : 1, bearing }
+  return { distance, remaining: lengthSoFar ? 1 - covered / lengthSoFar : 1, bearing, segmentIndex, fractionOnSegment }
+}
+
+export function remainingRoad(road: RoadLine, progress: ReturnType<typeof routeProgress>): RoadLine | undefined {
+  if (progress.remaining <= 0) return
+  const { segmentIndex, fractionOnSegment } = progress
+  const [x, y] = road.coordinates[segmentIndex]
+  const [endX, endY] = road.coordinates[segmentIndex + 1]
+  const start: Coordinates = [x + (endX - x) * fractionOnSegment, y + (endY - y) * fractionOnSegment]
+  return { type: 'LineString', coordinates: [start, ...road.coordinates.slice(segmentIndex + 1)] }
 }
 
 export function routeCheckpoints(trace: Point[], from: Point, to: Point) {

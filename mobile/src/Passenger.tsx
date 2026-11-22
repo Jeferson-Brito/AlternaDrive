@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppState, StyleSheet, Text, View } from 'react-native'
+import { AppState, StyleSheet, View } from 'react-native'
+import { Text } from './type'
 import * as Location from 'expo-location'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { api } from './api'
