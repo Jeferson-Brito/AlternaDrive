@@ -1,56 +1,55 @@
-import { useEffect, useRef } from 'react'
-import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { AccessibilityInfo, Animated, Easing, Image, StyleSheet, View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
-import Svg, { Path } from 'react-native-svg'
 import { Text } from './type'
 
-export function Startup() {
+export function Startup({ exiting, onExited }: { exiting: boolean; onExited: () => void }) {
   const progress = useRef(new Animated.Value(0)).current
+  const transition = useRef(new Animated.Value(0)).current
+  const [reduced, setReduced] = useState(false)
   useEffect(() => {
     let alive = true
-    let animation: Animated.CompositeAnimation | undefined
-    void AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
-      if (!alive || reduced) return
-      animation = Animated.loop(Animated.sequence([
-        Animated.timing(progress, { toValue: 1, duration: 2200, easing: Easing.linear, useNativeDriver: true }),
-        Animated.delay(360),
-      ]))
-      animation.start()
-    }).catch(() => undefined)
-    return () => { alive = false; animation?.stop() }
-  }, [progress])
+    const setPreference = (value: boolean) => { if (alive) setReduced(value) }
+    const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setPreference)
+    void AccessibilityInfo.isReduceMotionEnabled().then(setPreference).catch(() => undefined)
+    return () => { alive = false; listener.remove() }
+  }, [])
+  useEffect(() => {
+    if (reduced || exiting) return
+    const animation = Animated.loop(Animated.timing(progress, { toValue: 1, duration: 1250, useNativeDriver: true }))
+    animation.start()
+    return () => animation.stop()
+  }, [progress, exiting, reduced])
+  useEffect(() => {
+    if (!exiting) return
+    if (reduced) { onExited(); return }
+    const animation = Animated.timing(transition, {
+      toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    })
+    animation.start(({ finished }) => { if (finished) onExited() })
+    return () => animation.stop()
+  }, [transition, exiting, reduced, onExited])
 
-  const inputRange = [0, .43, .47, .5, .53, .57, 1]
-  const translateX = progress.interpolate({ inputRange, outputRange: [23, 45, 47, 50, 53, 55, 77] })
-  const translateY = progress.interpolate({ inputRange, outputRange: [70, 29, 26, 25, 26, 29, 70] })
-  const rotate = progress.interpolate({ inputRange, outputRange: ['-62deg', '-62deg', '-40deg', '0deg', '40deg', '62deg', '62deg'] })
-  const opacity = progress.interpolate({ inputRange: [0, .9, 1], outputRange: [1, 1, 0] })
-
-  return <View style={styles.screen} accessible accessibilityLabel="Abrindo AlternaDrive">
+  const barOffset = progress.interpolate({ inputRange: [0, 1], outputRange: [-36, 84] })
+  const opacity = transition.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+  const translateY = transition.interpolate({ inputRange: [0, 1], outputRange: [0, -28] })
+  return <Animated.View style={[styles.screen, { opacity, transform: [{ translateY }] }]} accessible accessibilityLabel="Abrindo AlternaDrive">
     <StatusBar style="dark" />
     <View style={styles.center}>
-      <View style={styles.mark}>
-        <Svg width={100} height={100} viewBox="0 0 100 100">
-          <Path d="M23 70 45 29Q50 20 55 29L77 70M35 52h30" fill="none" stroke="#fff" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-        <Animated.View style={[styles.arrow, { opacity, transform: [{ translateX }, { translateY }] }]}>
-          <Animated.View style={{ transform: [{ rotate }] }}>
-            <Svg width={24} height={24} viewBox="0 0 24 24">
-              <Path d="M3 12h16m-7-7 7 7-7 7" fill="none" stroke="#10483c" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M3 12h16m-7-7 7 7-7 7" fill="none" stroke="#a4f5d6" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </Animated.View>
-        </Animated.View>
-      </View>
+      <Image accessibilityIgnoresInvertColors source={require('../assets/alternadrive.png')} style={styles.logo} />
       <Text style={styles.title}>AlternaDrive</Text>
+      <View style={styles.track}>
+        <Animated.View style={[styles.progress, { transform: [{ translateX: barOffset }] }]} />
+      </View>
     </View>
-  </View>
+  </Animated.View>
 }
 
 const styles = StyleSheet.create({
   screen: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f9f6' },
-  center: { alignItems: 'center', justifyContent: 'center', width: '100%', height: 100 },
-  mark: { width: 100, height: 100, borderRadius: 25, backgroundColor: '#105548' },
-  arrow: { position: 'absolute', left: -12, top: -12 },
-  title: { position: 'absolute', top: 115, color: '#163c32', fontSize: 30, fontWeight: '800', letterSpacing: -.7 },
+  center: { alignItems: 'center', height: 92, width: '100%' },
+  logo: { width: 92, height: 92, borderRadius: 24 },
+  title: { position: 'absolute', top: 107, color: '#163c32', fontSize: 30, fontWeight: '800', letterSpacing: -.7 },
+  track: { position: 'absolute', top: 161, width: 84, height: 3, borderRadius: 3, overflow: 'hidden', backgroundColor: '#d5e8df' },
+  progress: { width: 36, height: 3, borderRadius: 3, backgroundColor: '#2e846e' },
 })

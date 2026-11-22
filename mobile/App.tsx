@@ -675,7 +675,8 @@ export default function App() {
     const timer = setTimeout(() => setMinimumElapsed(true), 3000)
     return () => clearTimeout(timer)
   }, [])
-  const showingStartup = !minimumElapsed || !startupReady
+  const [showingStartup, setShowingStartup] = useState(true)
+  const finishStartup = useCallback(() => setShowingStartup(false), [])
   return <SafeAreaProvider>
     <View style={styles.appSurface}>
       <StatusBar style="dark" />
@@ -683,7 +684,7 @@ export default function App() {
         pointerEvents={showingStartup ? 'none' : 'auto'}>
         {(fontsLoaded || fontError) && <Operation onStartupReady={markReady} />}
       </View>
-      {showingStartup && <Startup />}
+      {showingStartup && <Startup exiting={minimumElapsed && startupReady} onExited={finishStartup} />}
     </View>
   </SafeAreaProvider>
 }
