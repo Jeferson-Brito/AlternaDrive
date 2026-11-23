@@ -12,6 +12,7 @@ import { Button, Field, NumberField, ui } from './src/controls'
 import { JourneyMap, LoginMap } from './src/AppMap'
 import { isExpoGo } from './src/environment'
 import { VehicleForm } from './src/VehicleForm'
+import { GuideTip, TutorialScroll } from './src/Tutorial'
 import { Welcome } from './src/Welcome'
 import { Startup } from './src/Startup'
 import { StartJourneyForm } from './src/StartJourneyForm'
@@ -537,17 +538,15 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
             <Text style={ui.muted}>{nextSetup === 'vehicle' ? 'Cadastre o veículo que você usa para trabalhar.'
               : 'Defina o ponto de partida, o destino e a tarifa por passageiro.'}</Text>
           </View>}
+          <View style={styles.homeControls}>
+            {nextSetup === 'start' && <IconButton icon="route" label="Editar percurso" onPress={() => show('route')} />}
           <Pressable accessibilityRole="button" style={({ pressed }) => [ui.button, styles.homeStart, pressed && ui.dim]}
             onPress={() => show(nextSetup)}>
             <Icon name="route" color="#fff" size={22} />
             <Text style={ui.buttonText}>{nextSetup === 'vehicle' ? 'Cadastrar veículo' : nextSetup === 'route' ? 'Configurar percurso e tarifa' : 'Iniciar jornada'}</Text>
           </Pressable>
-          {!!data.defaults.defaultPointA && <Pressable accessibilityRole="button" accessibilityLabel="Editar percurso"
-            style={({ pressed }) => [styles.homeRoute, pressed && ui.dim]} onPress={() => show('route')}>
-            <Icon name="route" size={17} />
-            <Text numberOfLines={1} style={styles.homeRouteLabel}>{data.defaults.defaultDestination}</Text>
-            <Text style={styles.linkText}>Editar</Text>
-          </Pressable>}
+          {nextSetup === 'start' && <IconButton icon="chart" label="Relatório de lucro" onPress={() => show('report')} />}
+          </View>
         </>}
       </View>}
     </SafeAreaView>
@@ -581,8 +580,9 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
               </ScrollView>
             </> : <>
             <View style={styles.sheetHeader}><Text style={styles.title}>{panel && titles[panel]}</Text><IconButton icon="close" label="Fechar" disabled={busy} onPress={() => show(null)} /></View>
-            <ScrollView key={panel} style={styles.scroll} contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+            <TutorialScroll key={panel} guide={panel === 'editVehicle' ? 'vehicle' : panel} owner={data.user.id} style={styles.scroll} contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
               {secureError}
+              {!!panel && !['vehicle', 'editVehicle', 'route', 'start'].includes(panel) && <GuideTip />}
               {panel === 'closing' && journeyClosing && <>
                 <View style={styles.closingHero}>
                   <View style={styles.closingHeading}>
@@ -751,7 +751,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
                 <NumberField mode="money" label="Valor (R$)" value={second} onChange={setSecond} />
                 {submit('Salvar despesa', () => save('entries', { kind: 'expense', label: first, amount: cents(second) }), !first.trim() || !minPrice(second))}
               </>}
-            </ScrollView>
+            </TutorialScroll>
             {panel === 'start' && <View style={styles.startFooter}>
               {submit('Iniciar jornada', begin, !vehicleId || !validOdometer)}
             </View>}
@@ -834,17 +834,18 @@ const styles = StyleSheet.create({
   closingMetrics: { flexDirection: 'row', paddingVertical: 12, backgroundColor: '#edf4f0', borderRadius: 12, gap: 5 },
   closingDetails: { backgroundColor: '#f6faf8', borderRadius: 12, padding: 10, gap: 5 },
   closingRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 5, gap: 10 },
-  homeTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  floatingMenu: { backgroundColor: '#edf4f0', borderRadius: 13, elevation: 4 },
-  dayBubble: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 22,
-    paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#e4ede8', elevation: 4 },
+  homeTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', paddingHorizontal: 51, minHeight: 44 },
+  floatingMenu: { position: 'absolute', left: 0, top: 0, backgroundColor: '#faf8f1', borderRadius: 22, elevation: 4 },
+  dayBubble: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#233c36', borderRadius: 22,
+    paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#304d45', elevation: 4 },
   dayMetric: { flexShrink: 1, minWidth: 58, gap: 2 },
   dayBoardings: { gap: 2 },
-  dayDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: '#dbe9e2' },
-  dayLabel: { color: '#526a60', fontSize: 11, fontWeight: '600' },
-  dayValue: { color: '#15362f', fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  homeAction: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4ede8', borderRadius: 23, padding: 7, gap: 6, elevation: 3 },
-  homeStart: { minHeight: 52, flexDirection: 'row', gap: 8 },
+  dayDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: '#718980' },
+  dayLabel: { color: '#c3d9ce', fontSize: 11, fontWeight: '600' },
+  dayValue: { color: '#fff', fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  homeAction: { backgroundColor: '#fcfaf4', borderWidth: 1, borderColor: '#eee9db', borderRadius: 23, padding: 7, gap: 6, elevation: 3 },
+  homeControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  homeStart: { flex: 1, minHeight: 52, borderRadius: 26, flexDirection: 'row', gap: 8 },
   drawer: { gap: 5 },
   grip: { alignSelf: 'center', width: 32, height: 4, borderRadius: 4, backgroundColor: '#a0b8ad' },
   destinationRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 3 },
@@ -857,7 +858,7 @@ const styles = StyleSheet.create({
   error: { color: '#8a2019', backgroundColor: '#fff0ef', padding: 9, borderRadius: 9 },
   modalBase: { flex: 1, backgroundColor: '#142f2963' },
   sheetKeyboard: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '94%', flexShrink: 1, backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, gap: 12 },
+  sheet: { maxHeight: '94%', flexShrink: 1, backgroundColor: '#fffdf8', borderTopLeftRadius: 28, borderTopRightRadius: 28, gap: 12 },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, gap: 8 },
   scroll: { flexGrow: 0, flexShrink: 1 },
   sheetBody: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },

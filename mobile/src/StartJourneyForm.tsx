@@ -1,3 +1,4 @@
+import { GuideTip } from './Tutorial'
 import { Pressable, StyleSheet, Switch, View } from 'react-native'
 import { NumberField, ui } from './controls'
 import type { Dashboard } from './model'
@@ -19,6 +20,7 @@ type Props = {
 
 export function StartJourneyForm({ defaults, vehicles, vehicleId, onVehicle, odometer, onOdometer, useCurrent, onUseCurrent, busy }: Props) {
   return <View style={styles.form}>
+    <GuideTip />
     <View style={styles.route}>
       <View style={styles.point}>
         <View style={styles.pin}><Text style={styles.pinText}>A</Text></View>
@@ -41,6 +43,7 @@ export function StartJourneyForm({ defaults, vehicles, vehicleId, onVehicle, odo
       </View>
     </View>
 
+    <GuideTip step={1} />
     <View style={styles.options}>
       <Text style={ui.label}>Veículo</Text>
       <View style={styles.vehicles} accessibilityRole="radiogroup">
@@ -57,9 +60,11 @@ export function StartJourneyForm({ defaults, vehicles, vehicleId, onVehicle, odo
       </View>
     </View>
 
+    <GuideTip step={2} />
     <NumberField mode="odometer" label="Hodômetro inicial (km)" value={odometer} onChange={onOdometer}
       hint="Use a quilometragem total que aparece no painel do veículo." />
 
+    <GuideTip step={3} />
     <View style={styles.location}>
       <View style={styles.pointDetails}>
         <Text style={ui.label}>Partir da minha localização</Text>

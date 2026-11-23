@@ -1,3 +1,4 @@
+import { GuideTip } from './Tutorial'
 import { StyleSheet, View } from 'react-native'
 import { Text } from './type'
 import { Address, Button, NumberField } from './controls'
@@ -15,6 +16,7 @@ export function RouteForm({ token, origin, destination, fare, onOrigin, onDestin
   onSave: () => void
 }) {
   return <View style={styles.form}>
+    <GuideTip />
     <View style={styles.points}>
       <View style={styles.point}>
         <View style={styles.rail} accessible={false}>
@@ -26,6 +28,7 @@ export function RouteForm({ token, origin, destination, fare, onOrigin, onDestin
             value={origin} onChange={onOrigin} />
         </View>
       </View>
+      <GuideTip step={1} />
       <View style={styles.point}>
         <View style={styles.rail} accessible={false}>
           <Text style={[styles.pin, styles.destination]}>B</Text>
@@ -36,6 +39,7 @@ export function RouteForm({ token, origin, destination, fare, onOrigin, onDestin
         </View>
       </View>
     </View>
+    <GuideTip step={2} />
     <View style={styles.fare}>
       <NumberField mode="money" label="Tarifa por passageiro" value={fare} onChange={onFare} />
     </View>

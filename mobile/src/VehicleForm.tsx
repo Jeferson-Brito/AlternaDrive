@@ -1,3 +1,4 @@
+import { GuideTip } from './Tutorial'
 import { useEffect, useMemo, useState } from 'react'
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from './type'
@@ -62,11 +63,13 @@ export function VehicleForm({ busy, save, vehicle }: { busy: boolean; save: (veh
   const passengerCapacity = type === 'motorcycle' ? 1 : numeric(capacity)
   const unit = fuel === 'GNV' ? 'm³' : 'L'
   return <View style={styles.form}>
+    <GuideTip />
     <Text style={ui.label}>Tipo de veículo</Text>
     <View style={styles.choices}>
       <Button title="Carro" secondary={type !== 'car'} onPress={() => { if (type !== 'car') { setType('car'); clearReference(); setName('') } }} />
       <Button title="Moto" secondary={type !== 'motorcycle'} onPress={() => { if (type !== 'motorcycle') { setType('motorcycle'); clearReference(); setName('') } }} />
     </View>
+    <GuideTip step={1} />
     <View style={styles.columns}>
       <View style={styles.name}>
         <Field label="Modelo do veículo" value={name} maxLength={100} autoCorrect={false}
@@ -90,6 +93,7 @@ export function VehicleForm({ busy, save, vehicle }: { busy: boolean; save: (veh
     <Text style={ui.muted}>{unavailable ? 'Catálogo indisponível. Você pode preencher manualmente.'
       : selected ? 'Modelo confirmado. Confira os dados disponíveis e complete os demais.'
       : 'Escolha uma sugestão ou preencha os dados manualmente.'}</Text>
+    <GuideTip step={2} />
     <Text style={ui.label}>Combustível</Text>
     <View style={styles.choices}>{fuels.map(item => <Button key={item} title={item} secondary={item !== fuel}
       onPress={() => {
@@ -98,6 +102,7 @@ export function VehicleForm({ busy, save, vehicle }: { busy: boolean; save: (veh
         setReference(selected, item)
       }} />)}</View>
     <NumberField mode="decimal" label={'Capacidade do tanque (' + unit + ')'} value={tank} onChange={setTank} />
+    <GuideTip step={3} />
     <View style={styles.columns}>
       <View style={styles.name}><NumberField mode="decimal" label={'Cidade (km/' + unit + ')'} value={city} onChange={setCity} /></View>
       <View style={styles.name}><NumberField mode="decimal" label={'Estrada (km/' + unit + ')'} value={highway} onChange={setHighway} /></View>
