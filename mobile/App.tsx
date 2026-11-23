@@ -12,6 +12,7 @@ import { Button, Field, NumberField, ui } from './src/controls'
 import { JourneyMap, LoginMap } from './src/AppMap'
 import { isExpoGo } from './src/environment'
 import { VehicleForm } from './src/VehicleForm'
+import { Welcome } from './src/Welcome'
 import { Startup } from './src/Startup'
 import { StartJourneyForm } from './src/StartJourneyForm'
 import { RouteForm } from './src/RouteForm'
@@ -64,6 +65,7 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
   const [pendingBoarding, setPendingBoarding] = useState(0)
   const [adminOpen, setAdminOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [driverEntry, setDriverEntry] = useState(false)
   const [passenger, setPassenger] = useState(false)
   const [register, setRegister] = useState(false)
   const [visiblePassword, setVisiblePassword] = useState(false)
@@ -375,6 +377,8 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
         <ScrollView contentContainerStyle={styles.loginBody} keyboardShouldPersistTaps="handled">
           <View style={styles.loginCard}>
             <Brand />
+            {!token && !driverEntry ? <Welcome onDriver={() => { setDriverEntry(true); setError('') }}
+              onPassenger={() => setPassenger(true)} /> : <>
             <Text style={styles.title}>{token ? 'Não foi possível conectar' : register ? 'Criar conta' : 'Entre na sua conta'}</Text>
             {secureError}
             {token ? <Button title="Tentar novamente" disabled={busy} onPress={() => void run(async () => { await reload(token) })} /> : <>
@@ -394,15 +398,21 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
                 <Text style={styles.linkText}>{register ? 'Já tenho conta' : 'Criar conta'}</Text>
               </Pressable>
             </>}
-            {!token && <View style={styles.loginPassenger}>
-              <MenuRow icon="route" label="Abrir mapa do passageiro" onPress={() => setPassenger(true)} />
-            </View>}
+            {!token && <Pressable accessibilityRole="button" style={styles.loginLink} onPress={() => {
+              setDriverEntry(false); setRegister(false); setPassword(''); setVisiblePassword(false); setError('')
+            }}>
+              <Text style={styles.linkText}>Voltar às opções</Text>
+            </Pressable>}
+            </>}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   </View>
 
+  const hasVehicle = data.vehicles.length > 0
+  const hasRoute = !!(data.defaults.defaultPointA && data.defaults.defaultPointB && data.defaults.defaultFare)
+  const nextSetup = !hasVehicle ? 'vehicle' : !hasRoute ? 'route' : 'start'
   const stats = data.summaries.find(item => item.period === 'day')
   const destination = active ? (active.approachingStart || active.arrivals % 2 ? active.origin : active.destination) : data.defaults.defaultDestination
   const dayRevenue = money((stats?.revenue ?? 0) + pendingBoarding * (active?.fare ?? 0))
@@ -522,10 +532,15 @@ function Operation({ onStartupReady }: { onStartupReady: () => void }) {
               disabled={busy} onPress={() => void run(() => enableTracking(active))} />}
           </Animated.View>}
         </> : <>
+          {nextSetup !== 'start' && <View style={styles.setupHint}>
+            <Text style={styles.label}>Prepare sua primeira jornada</Text>
+            <Text style={ui.muted}>{nextSetup === 'vehicle' ? 'Cadastre o veículo que você usa para trabalhar.'
+              : 'Defina o ponto de partida, o destino e a tarifa por passageiro.'}</Text>
+          </View>}
           <Pressable accessibilityRole="button" style={({ pressed }) => [ui.button, styles.homeStart, pressed && ui.dim]}
-            onPress={() => show(!data.vehicles.length ? 'vehicle' : !data.defaults.defaultPointA ? 'route' : 'start')}>
+            onPress={() => show(nextSetup)}>
             <Icon name="route" color="#fff" size={22} />
-            <Text style={ui.buttonText}>{data.vehicles.length ? 'Iniciar jornada' : 'Cadastrar primeiro veículo'}</Text>
+            <Text style={ui.buttonText}>{nextSetup === 'vehicle' ? 'Cadastrar veículo' : nextSetup === 'route' ? 'Configurar percurso e tarifa' : 'Iniciar jornada'}</Text>
           </Pressable>
           {!!data.defaults.defaultPointA && <Pressable accessibilityRole="button" accessibilityLabel="Editar percurso"
             style={({ pressed }) => [styles.homeRoute, pressed && ui.dim]} onPress={() => show('route')}>
@@ -782,7 +797,7 @@ const styles = StyleSheet.create({
   startFooter: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#dceae3' },
   loginLink: { alignItems: 'center', justifyContent: 'center', minHeight: 42 },
   linkText: { color: '#0b5a48', fontWeight: '800', fontSize: 13 },
-  loginPassenger: { borderTopWidth: 1, borderTopColor: '#e2ece7', paddingTop: 6 },
+  setupHint: { paddingHorizontal: 9, paddingVertical: 5, gap: 2 },
   menuGroup: { borderWidth: 1, borderColor: '#e1ece6', borderRadius: 17, overflow: 'hidden', backgroundColor: '#fbfdfc' },
   homeRoute: { flexDirection: 'row', alignItems: 'center', minHeight: 43, gap: 9, paddingHorizontal: 10 },
   homeRouteLabel: { flex: 1, color: '#3c5b51', fontSize: 13, fontWeight: '700' },
