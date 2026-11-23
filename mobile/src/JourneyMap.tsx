@@ -9,7 +9,7 @@ import { useRouteHighlight } from './route-trail'
 import { StopMarker } from './StopMarker'
 import { MapPencil } from './MapPencil'
 import { useDriverName } from './use-driver-name'
-import { DriverMarker } from './DriverMarker'
+import { DriverMarker, vehicleMarkerScale } from './DriverMarker'
 import libertyStyle from '../assets/openfreemap-liberty.json'
 // Both renderers use style v8, with separate TypeScript style packages.
 const mapStyle = monochromeStreets(libertyStyle as Parameters<typeof monochromeStreets>[0]) as unknown as MapProps['mapStyle']
@@ -36,6 +36,7 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
   const driverName = useDriverName()
   const map = useRef<MapRef>(null)
   const { height } = useWindowDimensions()
+  const [markerScale, setMarkerScale] = useState(() => vehicleMarkerScale(cityView.zoom))
   const [loaded, setLoaded] = useState(false)
   const [moving, setMoving] = useState(false)
   const exploring = useRef(false)
@@ -71,7 +72,13 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
           onExplore()
         }
       }}
-      onRegionDidChange={() => { if (moving) setMoving(false) }}>
+      onRegionIsChanging={event => {
+        if (event.nativeEvent.userInteraction) setMarkerScale(vehicleMarkerScale(event.nativeEvent.zoom))
+      }}
+      onRegionDidChange={event => {
+        setMarkerScale(vehicleMarkerScale(event.nativeEvent.zoom))
+        if (moving) setMoving(false)
+      }}>
       <Camera ref={camera} initialViewState={cityView} />
       {displayed && <GeoJSONSource id="journey" data={displayed}>
         <Layer type="line" paint={{ 'line-color': '#51329a', 'line-width': 8 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
@@ -87,14 +94,14 @@ export function JourneyMap({ a, b, active, route, following, onExplore, drivers,
       {drivers.map(driver => <Marker key={driver.id} id={'nearby-' + driver.id} lngLat={coords(driver)} anchor="bottom" onPress={() => driverName.show(driver.id)}>
         <View style={{ alignItems: 'center' }}>
           {driverName.selected === driver.id && !!driver.firstName && <Text style={styles.driverName} numberOfLines={1}>{driver.firstName}</Text>}
-          <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} carColor={driver.carColor} />
+          <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} carColor={driver.carColor} scale={markerScale} />
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
         </View>
       </Marker>)}
       {active && current && <Marker id="driver" lngLat={coords(current)} anchor="bottom" onPress={() => driverName.show('own')}>
         <View style={{ alignItems: 'center' }}>
           {driverName.selected === 'own' && !!ownFirstName && <Text style={styles.driverName} numberOfLines={1}>{ownFirstName}</Text>}
-          <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
+          <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} scale={markerScale} />
         </View>
       </Marker>}
     </Map>

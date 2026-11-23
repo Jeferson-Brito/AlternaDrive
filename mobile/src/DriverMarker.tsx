@@ -2,10 +2,10 @@ import { StyleSheet, View } from 'react-native'
 import { defaultCarColor } from '../../src/car-colors'
 import Svg, { Defs, Ellipse, LinearGradient, Path, Rect, Stop } from 'react-native-svg'
 
-export function DriverMarker({ motorcycle, nearby = false, carColor }: { motorcycle?: boolean; nearby?: boolean; carColor?: string | null }) {
+export function DriverMarker({ motorcycle, nearby = false, carColor, scale = 1 }: { motorcycle?: boolean; nearby?: boolean; carColor?: string | null; scale?: number }) {
   return <View collapsable={false} accessible accessibilityLabel={nearby ? (motorcycle ? 'Moto próxima' : 'Carro próximo') : motorcycle ? 'Sua moto' : 'Seu carro'}
     style={nearby ? styles.nearby : styles.marker}>
-    <Svg width={nearby ? 24 : 39} height={nearby ? 32 : 52} viewBox="0 0 44 60">
+    <Svg width={(nearby ? 24 : 39) * scale} height={(nearby ? 32 : 52) * scale} viewBox="0 0 44 60">
       <Defs>
         <LinearGradient id="paintHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
           <Stop offset="0%" stopColor="#fff" stopOpacity=".50" />
@@ -47,7 +47,12 @@ export function DriverMarker({ motorcycle, nearby = false, carColor }: { motorcy
   </View>
 }
 
+export function vehicleMarkerScale(zoom: number) {
+  // Quantize pinch updates so the native marker is not redrawn for every frame.
+  return Math.round(Math.max(.40, Math.min(1, .40 + (zoom - 11) * .10)) * 20) / 20
+}
+
 const styles = StyleSheet.create({
-  nearby: { width: 28, height: 36, alignItems: 'center', justifyContent: 'center' },
-  marker: { width: 43, height: 56, alignItems: 'center', justifyContent: 'center' },
+  nearby: { width: 28, height: 36, alignItems: 'center', justifyContent: 'flex-end' },
+  marker: { width: 43, height: 56, alignItems: 'center', justifyContent: 'flex-end' },
 })

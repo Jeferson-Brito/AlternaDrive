@@ -8,7 +8,7 @@ import { useRouteHighlight } from './route-trail'
 import { StopMarker } from './StopMarker'
 import { MapPencil } from './MapPencil'
 import { useDriverName } from './use-driver-name'
-import { DriverMarker } from './DriverMarker'
+import { DriverMarker, vehicleMarkerScale } from './DriverMarker'
 
 const initialRegion = { latitude: -7.132, longitude: -34.871, latitudeDelta: .033, longitudeDelta: .030 }
 const previewPalette: MapStyleElement[] = [
@@ -46,6 +46,7 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
   const driverName = useDriverName()
   const map = useRef<MapView>(null)
   const { height } = useWindowDimensions()
+  const [markerScale, setMarkerScale] = useState(() => vehicleMarkerScale(14))
   const [ready, setReady] = useState(false)
   const { road, visibleRoad, from, current, heading, routeKey } = route ?? {}
   const center = active ? (current ?? from) : null
@@ -65,6 +66,9 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
     scrollEnabled={!decorative} zoomEnabled={!decorative} rotateEnabled={!decorative} pitchEnabled={!decorative}
     showsBuildings={false} showsIndoorLevelPicker={false} showsIndoors={false} toolbarEnabled={false}
     mapPadding={active ? navigationPadding(height) : undefined}
+    onRegionChangeComplete={region => {
+      if (region.longitudeDelta > 0) setMarkerScale(vehicleMarkerScale(Math.log2(360 / region.longitudeDelta)))
+    }}
     onPanDrag={() => { if (active && following) onExplore?.() }}
     onRegionChangeStart={(_, details) => { if (active && following && details?.isGesture) onExplore?.() }}>
     {routeCoordinates && <>
@@ -81,14 +85,14 @@ export function PreviewMap({ a, b, active, route, following = true, onExplore, d
     {drivers.map(driver => <Marker key={driver.id} coordinate={driver} anchor={{ x: .5, y: .5 }} onPress={() => driverName.show(driver.id)}>
       <View style={styles.driverMarker}>
       {driverName.selected === driver.id && !!driver.firstName && <Text style={styles.driverName} numberOfLines={1}>{driver.firstName}</Text>}
-          <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} carColor={driver.carColor} />
+          <DriverMarker nearby motorcycle={driver.type === 'motorcycle'} carColor={driver.carColor} scale={markerScale} />
         {driver.arrivalSeconds !== undefined && <Text style={styles.arrival}>{Math.max(1, Math.ceil(driver.arrivalSeconds / 60))} min</Text>}
       </View>
     </Marker>)}
     {active && current && <Marker coordinate={current} onPress={() => driverName.show('own')} anchor={{ x: .5, y: .5 }}>
       <View style={{ alignItems: 'center' }}>
           {driverName.selected === 'own' && !!ownFirstName && <Text style={styles.driverName} numberOfLines={1}>{ownFirstName}</Text>}
-          <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} />
+          <DriverMarker motorcycle={active.vehicle.type === 'motorcycle'} carColor={carColor} scale={markerScale} />
         </View>
     </Marker>}
   </MapView>
